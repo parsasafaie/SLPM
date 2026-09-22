@@ -113,6 +113,16 @@ const SLPM = (() => {
     'Architecture': 'معماری',
     'Status': 'وضعیت',
     'Dependencies': 'وابستگی‌ها',
+    /* Status is one dpkg phrase mapped to one label (see statusLabel in apps.js). */
+    'installed': 'نصب‌شده',
+    'half-installed': 'نیمه‌نصب',
+    'half-configured': 'نیمه‌تنظیم',
+    'unpacked': 'باز شده',
+    'triggers awaited': 'در انتظار triggers',
+    'triggers pending': 'triggers در صف',
+    'config files only': 'فقط فایل‌های تنظیمات',
+    'installed (held)': 'نصب‌شده (نگه‌داشته‌شده)',
+    'not installed': 'نصب نیست',
     'This package is essential to the system and cannot be removed.':
       'این بسته برای سیستم حیاتی است و حذف نمی‌شود.',
     'Remove {name}?': '{name} حذف شود؟',
@@ -120,6 +130,8 @@ const SLPM = (() => {
     'You will be asked for your admin password to make this change.':
       'برای اعمال این تغییر رمز مدیر از شما پرسیده می‌شود.',
     'Removing {name}…': 'در حال حذف {name}…',
+    /* The server's busy label (app.py) uses the same sentence without the ellipsis. */
+    'Removing {name}': 'در حال حذف {name}',
     'Removed': 'حذف شد',
     'Could not remove': 'حذف نشد',
     'Remove {name}': 'حذف {name}',
@@ -224,16 +236,25 @@ const SLPM = (() => {
 
   /** Translate one string (and any {name} values) into the current language. */
   function tt(text, values) {
-    if (state.lang !== 'fa' || text == null) return text;
+    if (text == null) return text;
+    /* English is the source language, but the caller's values still have to be
+       substituted: T('Removing {name}…', {name: 'vlc'}) must render "Removing vlc…"
+       in English too, not the raw placeholder. Only the lookup is skipped. */
+    if (state.lang !== 'fa') return fill(text, values);
     let out = FA[text];
     if (out === undefined) {
       for (const [re, replacement] of FA_PATTERNS) {
         if (re.test(text)) { out = text.replace(re, replacement); break; }
       }
     }
-    if (out === undefined) return text;   // unknown: show English, never break the page
-    if (!values) return out;
-    return out.replace(/\{(\w+)\}/g, (m, k) => (k in values ? String(values[k]) : m));
+    if (out === undefined) return fill(text, values);  // unknown: show English paragraph
+    return fill(out, values);
+  }
+
+  /** Substitute {name}-style fields; an absent key leaves its placeholder in place. */
+  function fill(text, values) {
+    if (!values) return text;
+    return text.replace(/\{(\w+)\}/g, (m, k) => (k in values ? String(values[k]) : m));
   }
 
   /** Apply the theme; called from <head> so dark is in place before the first paint. */

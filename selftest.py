@@ -10,6 +10,8 @@ filtering, package classification, archive launcher discovery, and the helper's
 command allowlist.
 """
 import ast
+import re
+import subprocess
 import sys
 import tempfile
 import zipfile
@@ -19,6 +21,35 @@ ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT))
 
 from slpm import apps, apt, appimage, desktop, helper, i18n, installer, proc  # noqa: E402
+
+# Runs inside node: load the browser catalog twice, once per language, and report every
+# T() call whose {placeholder} survives. Prints one line per failure, nothing on success.
+JS_CATALOG_CHECK = r"""
+import fs from 'node:fs';
+const SRC = fs.readFileSync('static/js/prefs.js', 'utf8');
+const CASES = [
+  ['Removing {name}…', { name: 'vlc' }],
+  ['Removing {name}', { name: 'vlc' }],
+  ['Remove {name}?', { name: 'vlc' }],
+  ['Remove {name}', { name: 'vlc' }],
+  ['Package: {name}', { name: 'vlc' }],
+  ['Nothing matched “{q}”.', { q: 'foo' }],
+  ['Showing the first 600 of {n} items — narrow the search to see the rest.', { n: 900 }],
+];
+const bad = [];
+for (const lang of ['en', 'fa']) {
+  globalThis.document = { documentElement: { dataset: { lang, theme: 'light' } },
+                          cookie: '', querySelector: () => null };
+  globalThis.window = { location: { href: 'http://x/', replace() {} } };
+  globalThis.fetch = () => Promise.resolve({ json: () => Promise.resolve({}) });
+  const TT = eval(SRC + '\nTT');
+  for (const [text, values] of CASES) {
+    const out = TT(text, values);
+    if (/\{\w+\}/.test(out)) bad.push(`${lang}: ${JSON.stringify(text)} -> ${JSON.stringify(out)}`);
+  }
+}
+for (const line of bad) console.log(line);
+"""
 
 FAILED = []
 
@@ -289,6 +320,14 @@ check("English mode ignores the catalog",
       i18n.tr("en", "Installed Apps"), "Installed Apps")
 check("values are interpolated",
       i18n.tr("fa", "{name} was removed.", name="vlc"), "vlc حذف شد.")
+# English keeps the placeholders too: the untranslated sentence is the one most likely
+# to reach the UI verbatim, so it must not show "{name}" to the user.
+check("English also substitutes values",
+      i18n.tr("en", "{name} was removed.", name="vlc"), "vlc was removed.")
+check("English substitutes on the unknown-sentence path",
+      i18n.tr("en", "No longer in {root}.", root="/tmp/x"), "No longer in /tmp/x.")
+check("a missing value leaves English placeholders rather than raising",
+      i18n.tr("en", "{name} was removed."), "{name} was removed.")
 check("package names stay in Latin script",
       "vlc" in i18n.tr("fa", "{name} was removed.", name="vlc"), True)
 
@@ -315,12 +354,35 @@ for source in list((ROOT / "slpm").glob("*.py")) + [ROOT / "app.py"]:
 untranslated = sorted(text for text in wrapped if text not in i18n._FA)
 check("every _t() message has a Persian entry", untranslated, [])
 
+# Every {{ t('...') }} key a template renders must have a Persian entry, or the page
+# silently shows English in Persian mode. The keys are read from the templates rather
+# than listed here, so a new one is covered the moment it is written.
+template_keys = set()
+for tpl in (ROOT / "templates").glob("*.html"):
+    for m in re.finditer(r"t\('([^']*)'", tpl.read_text()):
+        template_keys.add(m.group(1))
+check("every template string has a Persian entry",
+      sorted(k for k in template_keys if k not in i18n._FA), [])
+
 # The contextvar is what lets a module deep in a package operation answer in the
 # language of the request that triggered it.
 proc.set_lang("fa")
 check("proc.t follows the request language", proc.t("Installed Apps"), "برنامه‌های نصب‌شده")
 proc.set_lang("en")
 check("and switches back", proc.t("Installed Apps"), "Installed Apps")
+
+# The browser-side catalog has the same contract as the Python one, and the same trap:
+# a T() call with {name} values must be filled in *both* languages. Checking only the
+# Persian path is what let "Removing {name}…" reach the screen in English mode.
+js_check = subprocess.run(
+    ["node", "--input-type=module", "-e", JS_CATALOG_CHECK],
+    cwd=str(ROOT), capture_output=True, text=True,
+)
+if js_check.returncode == 127 or "node: not found" in js_check.stderr:
+    print("skip  browser catalog (node not installed)")
+else:
+    check("browser catalog substitutes values in both languages",
+          js_check.stdout.strip().splitlines(), [])
 
 print()
 if FAILED:

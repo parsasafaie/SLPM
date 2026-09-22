@@ -48,18 +48,29 @@ def _template(english):
     return tuple(fields)
 
 
-def tr(lang, english, **values):
-    """Translate one English sentence, interpolating any values into it."""
-    if normalize(lang) == "en" or not english:
-        return english
-    text = catalog(lang).get(english)
-    if text is None:
-        # Unknown sentence: hand back the original, but keep it populated.
-        return english.format(**values) if values else english
+def _fill(text, values):
+    """Substitute {name}-style fields, leaving the sentence alone if a field is missing."""
+    if not values:
+        return text
     try:
         return text.format(**values)
     except (KeyError, IndexError, ValueError):
         return text
+
+
+def tr(lang, english, **values):
+    """Translate one English sentence, interpolating any values into it."""
+    if not english:
+        return english
+    if normalize(lang) == "en":
+        # English is the source language, but it still carries the placeholders: a
+        # caller asking for English wants "vlc was removed.", not "{name} was removed.".
+        return _fill(english, values)
+    text = catalog(lang).get(english)
+    if text is None:
+        # Unknown sentence: hand back the original, but keep it populated.
+        return _fill(english, values)
+    return _fill(text, values)
 
 
 _FA = {

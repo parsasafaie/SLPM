@@ -226,10 +226,30 @@ async function pkgDetails(name, essential) {
       [T('Section')]: p.Section, [T('Priority')]: p.Priority,
       [T('Architecture')]: p.Architecture, [T('Maintainer')]: p.Maintainer,
       [T('Homepage')]: p.Homepage,
-      [T('Status')]: (p.Status || '').replace(/install ok/, 'installed'),
+      [T('Status')]: statusLabel(p.Status),
     }) +
     `<h3 class="small" style="margin-top:1rem">${esc(T('Dependencies'))}</h3>
      <p class="small muted">${esc((p.Depends || 'none').slice(0, 400))}</p>`;
+}
+
+/* dpkg reports Status as a three-word phrase ("install ok installed",
+   "deinstall ok config-files", "install ok half-configured"). Rewriting one word of it
+   in place produced "installed installed", so the whole phrase is mapped to a single
+   label instead - and an unfamiliar phrase is shown as-is rather than guessed at. */
+function statusLabel(status) {
+  const map = {
+    'install ok installed': T('installed'),
+    'install ok half-installed': T('half-installed'),
+    'install ok half-configured': T('half-configured'),
+    'install ok unpacked': T('unpacked'),
+    'install ok triggers-awaited': T('triggers awaited'),
+    'install ok triggers-pending': T('triggers pending'),
+    'deinstall ok config-files': T('config files only'),
+    'hold ok installed': T('installed (held)'),
+    'purge ok not-installed': T('not installed'),
+  };
+  const raw = (status || '').trim();
+  return map[raw] || raw;
 }
 
 function kv(obj) {
