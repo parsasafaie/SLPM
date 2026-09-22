@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="en" dir="ltr" data-lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>SLPM — Simple Linux Package Manager</title>
+<meta name="description" content="Install and remove Linux software without the terminal. A small app that runs on your own computer.">
+<link rel="stylesheet" href="style.css">
+<script>
+/* Read the saved choice before the first paint, so a dark page never flashes white.
+   localStorage rather than a cookie: GitHub Pages is static, so there is no server
+   to send a cookie to. */
+(function () {
+  try {
+    var t = localStorage.getItem('slpm-site-theme');
+    if (t === 'dark' || t === 'light') document.documentElement.dataset.theme = t;
+    var l = localStorage.getItem('slpm-site-lang');
+    if (l !== 'en' && l !== 'fa') {
+      // First visit: follow the browser's own language.
+      l = (navigator.language || 'en').toLowerCase().indexOf('fa') === 0 ? 'fa' : 'en';
+    }
+    document.documentElement.dataset.lang = l;
+    document.documentElement.lang = l;
+    document.documentElement.dir = l === 'fa' ? 'rtl' : 'ltr';
+  } catch (e) { /* private mode: keep the defaults already in the markup */ }
+})();
+</script>
+</head>
+<body>
+
+<header class="bar">
+  <a class="brand" href="#top">
+    <span class="mark">S</span>
+    <span class="brand-text">
+      <strong>SLPM</strong>
+      <span class="t-en">Simple Linux Package Manager</span>
+      <span class="t-fa">مدیر سادهٔ بسته‌های لینوکس</span>
+    </span>
+  </a>
+  <div class="bar-actions">
+    <button type="button" id="lang-toggle" class="btn-icon" aria-label="Switch language">
+      <span class="t-en">فارسی</span>
+      <span class="t-fa">English</span>
+    </button>
+    <button type="button" id="theme-toggle" class="btn-icon" aria-label="Switch theme">
+      <svg class="i-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8.5 8.5 0 019.5 4a7 7 0 108.5 10.5z"/></svg>
+      <svg class="i-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.2M12 19.3v2.2M4.2 12H2M22 12h-2.2M5.6 5.6L4 4M20 20l-1.6-1.6M18.4 5.6L20 4M4 20l1.6-1.6"/></svg>
+    </button>
+  </div>
+</header>
+
+<main id="top">
+
+  <!-- ------------------------------------------------------------- hero -->
+  <section class="hero">
+    <div class="hero-inner">
+      <span class="pill">
+        <span class="t-en">Free and open source</span>
+        <span class="t-fa">رایگان و متن‌باز</span>
+      </span>
+      <h1>
+        <span class="t-en">Install Linux software<br>without the terminal</span>
+        <span class="t-fa">نرم‌افزارهای لینوکس را<br>بدون ترمینال نصب کنید</span>
+      </h1>
+      <p class="lead">
+        <span class="t-en">A small app that runs on your own computer. Point it at a file you
+          downloaded, or pick something already installed — it works out the rest.</span>
+        <span class="t-fa">یک برنامهٔ کوچک که روی کامپیوتر خودتان اجرا می‌شود. فایلی را که
+          دانلود کرده‌اید به آن بدهید، یا از نصب‌شده‌ها انتخاب کنید — بقیه‌اش را خودش
+          انجام می‌دهد.</span>
+      </p>
+      <div class="cta">
+        <a class="btn btn-primary" href="#install">
+          <span class="t-en">Get started</span>
+          <span class="t-fa">شروع کار</span>
+        </a>
+        <a class="btn btn-ghost" data-repo="" target="_blank" rel="noopener">
+          <span class="t-en">View on GitHub</span>
+          <span class="t-fa">مشاهده در گیت‌هاب</span>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ------------------------------------------------------- what it is -->
+  <section class="wrap">
+    <div class="card intro">
+      <h2>
+        <span class="t-en">What is SLPM?</span>
+        <span class="t-fa">SLPM چیست؟</span>
+      </h2>
+      <p>
+        <span class="t-en">SLPM opens in your web browser. You do not need to type commands or
+          learn <span class="mono">apt</span>, <span class="mono">snap</span> and
+          <span class="mono">flatpak</span>. It shows the programs on your computer with the
+          same names and icons you see in your applications menu, and you install or remove
+          them with a click.</span>
+        <span class="t-fa">SLPM در مرورگر شما باز می‌شود. لازم نیست دستور بنویسید یا
+          <span class="mono">apt</span> و <span class="mono">snap</span> و
+          <span class="mono">flatpak</span> را یاد بگیرید. برنامه‌های روی کامپیوترتان را با
+          همان نام و آیکونی که در منوی برنامه‌ها می‌بینید نشان می‌دهد، و با یک کلیک نصب یا
+          حذفشان می‌کنید.</span>
+      </p>
+    </div>
+  </section>
+
+  <!-- ---------------------------------------------------------- install -->
+  <section class="wrap" id="install">
+    <h2 class="section-title">
+      <span class="t-en">Install in three steps</span>
+      <span class="t-fa">راه‌اندازی در چند مرحله</span>
+    </h2>
+
+    <p class="after"><span class="t-en">For setup, simply run the following commands in your terminal.</span><span class="t-fa">برای راه‌اندازی، کافی است دستورات زیر را در ترمینال خود اجرا کنید.</span></p>
+    <div class="terminal"><div class="terminal-bar"><span></span><span></span><span></span></div><pre><code><span class="c-dim">$</span> sudo apt update && sudo apt install -y git python3 python3-venv  # <span class="t-en">Install Git, Python and venv</span><span class="t-fa">نصب Git، پایتون و محیط مجازی</span>
+<span class="c-dim">$</span> git clone https://github.com/parsasafaie/SLPM.git  # <span class="t-en">Clone the project</span><span class="t-fa">دریافت پروژه</span>
+<span class="c-dim">$</span> cd SLPM  # <span class="t-en">Enter the project folder</span><span class="t-fa">ورود به پوشه پروژه</span>
+<span class="c-dim">$</span> python3 -m venv .venv  # <span class="t-en">Create a virtual environment</span><span class="t-fa">ساخت محیط مجازی</span>
+<span class="c-dim">$</span> source .venv/bin/activate  # <span class="t-en">Activate it</span><span class="t-fa">فعال‌سازی محیط مجازی</span>
+<span class="c-dim">$</span> pip install -r requirements.txt  # <span class="t-en">Install dependencies</span><span class="t-fa">نصب وابستگی‌ها</span>
+<span class="c-dim">$</span> python app.py  # <span class="t-en">Start SLPM</span><span class="t-fa">اجرای SLPM</span></code></pre></div>
+    <p class="after"><span class="t-en">Then open <span class="mono">http://127.0.0.1:8686</span> in your browser.</span><span class="t-fa">سپس <span class="mono">http://127.0.0.1:8686</span> را در مرورگر باز کنید.</span></p>
+
+  <!-- --------------------------------------------------------- features -->
+  <section class="wrap" id="features">
+    <h2 class="section-title">
+      <span class="t-en">What it does</span>
+      <span class="t-fa">چه کارهایی می‌کند</span>
+    </h2>
+
+    <article class="feature">
+      <div class="feature-text">
+        <h3>
+          <span class="t-en">Install a file you downloaded</span>
+          <span class="t-fa">نصب فایل‌های دانلودشده</span>
+        </h3>
+        <p>
+          <span class="t-en">Drag the file in, or paste its path. SLPM recognises what it is and
+            installs it the right way — no need to know which of the four formats you have.</span>
+          <span class="t-fa">فایل را در کادر رها کنید یا مسیر آن را وارد کنید. SLPM نوع آن را تشخیص می‌دهد
+            و به روش درست نصبش می‌کند — لازم نیست بدانید با کدام قالب سروکار دارید.</span>
+        </p>
+        <ul class="tags">
+          <li>.deb</li><li>.AppImage</li><li>.flatpakref</li><li>.tar.gz / .zip</li>
+        </ul>
+      </div>
+      <figure class="shot">
+        <img data-shot="install" alt="" width="1200" height="760" loading="lazy">
+      </figure>
+    </article>
+
+    <article class="feature flip">
+      <div class="feature-text">
+        <h3>
+          <span class="t-en">See everything you have installed</span>
+          <span class="t-fa">همهٔ برنامه‌های نصب‌شده را یک‌جا ببینید</span>
+        </h3>
+        <p>
+          <span class="t-en">The same names and icons as your applications menu — not cryptic
+            package names. Search the list, launch a program, read its details, or remove it.</span>
+          <span class="t-fa">همان نام و آیکونی را می‌بینید که در منوی برنامه‌هاست؛ نه نام‌های فنی و نامفهوم بسته‌ها.
+            فهرست را جست‌وجو کنید، برنامه‌ای را اجرا کنید، جزئیاتش را ببینید یا حذفش کنید.</span>
+        </p>
+      </div>
+      <figure class="shot">
+        <img data-shot="apps" alt="" width="1200" height="760" loading="lazy">
+      </figure>
+    </article>
+
+    <article class="feature">
+      <div class="feature-text">
+        <h3>
+          <span class="t-en">Advanced mode, when you want more</span>
+          <span class="t-fa">حالت پیشرفته، برای جزئیات بیشتر</span>
+        </h3>
+        <p>
+          <span class="t-en">One click reveals every installed package — libraries, drivers and
+            system components included — with the details a package manager would show you.</span>
+          <span class="t-fa">با یک کلیک همهٔ بسته‌های نصب‌شده، از کتابخانه‌ها و درایورها تا اجزای سیستمی،
+            با همان جزئیاتی که یک مدیر بسته نشان می‌دهد در دسترس شما قرار می‌گیرند.</span>
+        </p>
+      </div>
+      <figure class="shot">
+        <img data-shot="advanced" alt="" width="1200" height="760" loading="lazy">
+      </figure>
+    </article>
+
+    <article class="feature flip">
+      <div class="feature-text">
+        <h3>
+          <span class="t-en">A warning before anything risky</span>
+          <span class="t-fa">هشدار پیش از کارهای حساس</span>
+        </h3>
+        <p>
+          <span class="t-en">On Linux, removing the wrong thing can break the computer. SLPM
+            tells you plainly when a package is part of the system, and asks you to confirm
+            before it touches anything important.</span>
+          <span class="t-fa">در لینوکس، حذف یک بستهٔ اشتباه ممکن است سیستم را از کار بیندازد.
+            SLPM صریح می‌گوید کدام بسته جزء سیستم است و قبل از دست‌زدن به چیزهای مهم، از شما
+            تأیید می‌گیرد.</span>
+        </p>
+      </div>
+      <figure class="shot">
+        <img data-shot="warning" alt="" width="1200" height="760" loading="lazy">
+      </figure>
+    </article>
+  </section>
+
+  <!-- ------------------------------------------------------- safety/how -->
+  <section class="wrap">
+    <div class="two-col">
+      <div class="card">
+        <h2>
+          <span class="t-en">What you need</span>
+          <span class="t-fa">پیش‌نیازها</span>
+        </h2>
+        <ul class="ticks">
+          <li>
+            <span class="t-en">Linux with a desktop (developed on Ubuntu 26.04)</span>
+            <span class="t-fa">لینوکس با محیط گرافیکی (توسعه و آزمایش روی Ubuntu)</span>
+          </li>
+          <li>
+            <span class="t-en">Python 3.9 or newer</span>
+            <span class="t-fa">پایتون ۳.۹ یا بالاتر</span>
+          </li>
+          <li>
+            <span class="t-en">Your admin password, for installing and removing</span>
+            <span class="t-fa">رمز عبور مدیر سیستم برای نصب و حذف</span>
+          </li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h2>
+          <span class="t-en">How it stays safe</span>
+          <span class="t-fa">چطور از سیستم محافظت می‌کند</span>
+        </h2>
+        <ul class="ticks">
+          <li>
+            <span class="t-en">Runs only on your computer, not on the internet</span>
+            <span class="t-fa">فقط روی کامپیوتر خودتان اجرا می‌شود و به اینترنت وابسته نیست</span>
+          </li>
+          <li>
+            <span class="t-en">Your password is never stored anywhere</span>
+            <span class="t-fa">رمز عبور شما هیچ‌وقت ذخیره نمی‌شود</span>
+          </li>
+          <li>
+            <span class="t-en">Every command it runs is checked against a fixed list</span>
+            <span class="t-fa">هر دستور پیش از اجرا با یک فهرست مجاز بررسی می‌شود</span>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ------------------------------------------------------------ more -->
+  <section class="wrap">
+    <div class="card more">
+      <h2>
+        <span class="t-en">Want the technical details?</span>
+        <span class="t-fa">جزئیات فنی لازم دارید؟</span>
+      </h2>
+      <p>
+        <span class="t-en">This page is the short version. The READMEs cover the API, the safety
+          model, how privileged commands work and how to troubleshoot.</span>
+        <span class="t-fa">این صفحه خلاصه‌ای کوتاه است. برای API، جزئیات ایمنی و نحوهٔ کار برنامه،
+          دستورهای نیازمند دسترسی ریشه و رفع اشکال را پوشش می‌دهند.</span>
+      </p>
+      <div class="cta">
+        <a class="btn btn-ghost lang-en-only" data-repo="ARCHITECTURE.md" target="_blank" rel="noopener">
+          <span class="t-en">Technical architecture</span>
+          <span class="t-fa">معماری فنی</span>
+        </a>
+        <a class="btn btn-ghost lang-fa-only" data-repo="ARCHITECTURE.fa.md" target="_blank" rel="noopener">
+          <span class="t-en">Technical architecture</span>
+          <span class="t-fa">معماری فنی</span>
+        </a>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="foot">
+  <p>
+    <span class="t-en">SLPM — a local web app for installing and removing Linux software.</span>
+    <span class="t-fa">SLPM — یک برنامهٔ وب محلی برای نصب و حذف نرم‌افزارهای لینوکس.</span>
+  </p>
+</footer>
+
+<script src="site.js"></script>
+</body>
+</html>

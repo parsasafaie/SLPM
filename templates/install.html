@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}{{ t('Install') }} - SLPM{% endblock %}
+
+{% block content %}
+<section class="hero">
+  <h2>{{ t('Install an app') }}</h2>
+  <p class="muted">{{ t('Downloaded a file? Point SLPM at it. It works out what the file is and does the rest — you do not need to know anything about packages.') }}</p>
+</section>
+
+<div class="card">
+  <label class="label" for="path">{{ t('File to install') }}</label>
+  <div class="drop" id="drop">
+    <input id="path" type="text" dir="ltr" placeholder="{{ t('Drop a file here, or paste a path like /home/you/Downloads/app.AppImage') }}" autocomplete="off">
+    <button class="btn btn-ghost" id="browse">{{ t('Browse…') }}</button>
+  </div>
+  <div class="row gap">
+    <button class="btn btn-primary" id="install" disabled>{{ t('Install') }}</button>
+    <button class="btn btn-ghost" id="clear">{{ t('Clear') }}</button>
+  </div>
+  <div id="detect" class="detect"></div>
+</div>
+
+<div class="card">
+  <h3>{{ t('What SLPM can install') }}</h3>
+  <div class="grid-formats">
+    <div class="format">
+      <span class="tag">.deb</span>
+      <p>{{ t('Debian and Ubuntu installers. Installed system-wide with your admin password.') }}</p>
+    </div>
+    <div class="format">
+      <span class="tag ok">.AppImage</span>
+      <p>{{ t('Portable apps. Copied to ~/Applications and given a menu shortcut.') }}</p>
+    </div>
+    <div class="format">
+      <span class="tag ok">.flatpakref</span>
+      <p>{{ t('Flatpak apps, when Flatpak is installed.') }}</p>
+    </div>
+    <div class="format">
+      <span class="tag ok">.tar.gz / .zip</span>
+      <p>{{ t('Archives. Extracted to a managed folder, then you choose what to add to the menu.') }}</p>
+    </div>
+  </div>
+</div>
+
+<div id="progress" class="card hidden">
+  <div class="progress-head">
+    <div class="spinner"></div>
+    <div>
+      <strong id="progress-title">{{ t('Working…') }}</strong>
+      <p class="muted small" id="progress-note">{{ t('This can take a minute. Keep this window open.') }}</p>
+    </div>
+  </div>
+  <div class="bar"><div class="bar-fill"></div></div>
+</div>
+{% endblock %}
+
+{% block scripts %}<script src="{{ url_for('static', filename='js/install.js') }}"></script>{% endblock %}

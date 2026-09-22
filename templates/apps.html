@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}{{ t('Installed Apps') }} - SLPM{% endblock %}
+
+{% block content %}
+<section class="hero row-between">
+  <div>
+    <h2>{{ t('Installed apps') }}</h2>
+    <p class="muted" id="subtitle">{{ t('Everyday applications on this computer.') }}</p>
+  </div>
+  <div class="switcher" role="tablist">
+    <button class="switch active" data-mode="simple" role="tab">{{ t('Simple') }}</button>
+    <button class="switch" data-mode="advanced" role="tab">{{ t('Advanced') }}</button>
+  </div>
+</section>
+
+<div class="card toolbar">
+  <div class="search-wrap">
+    <svg viewBox="0 0 24 24" class="search-icon" aria-hidden="true">
+      <path d="M10 4a6 6 0 104.24 10.24l4.26 4.26 1.41-1.41-4.26-4.26A6 6 0 0010 4zm0 2a4 4 0 110 8 4 4 0 010-8z"/>
+    </svg>
+    <input id="search" type="search" placeholder="{{ t('Search apps…') }}" autocomplete="off">
+  </div>
+  <select id="filter" class="select" aria-label="{{ t('Filter') }}">
+    <option value="all">{{ t('All sources') }}</option>
+    <option value="apt">{{ t('System packages') }}</option>
+    <option value="appimage">AppImage</option>
+    <option value="flatpak">Flatpak</option>
+    <option value="snap">Snap</option>
+  </select>
+  <button class="btn btn-ghost" id="refresh">{{ t('Refresh') }}</button>
+  <button class="btn btn-ghost hidden" id="cleanup">{{ t('Clean unused dependencies') }}</button>
+</div>
+
+<div id="list" class="list"></div>
+<div id="empty" class="empty hidden">
+  <h3>{{ t('Nothing to show') }}</h3>
+  <p class="muted" id="empty-note">{{ t('No applications matched.') }}</p>
+</div>
+
+<div id="loader" class="loader hidden"><div class="spinner"></div><span>{{ t('Reading installed programs…') }}</span></div>
+{% endblock %}
+
+{% block scripts %}<script src="{{ url_for('static', filename='js/apps.js') }}"></script>{% endblock %}

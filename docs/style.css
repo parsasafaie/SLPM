@@ -1,0 +1,284 @@
+/* SLPM product page. One stylesheet, no build step, no dependencies.
+ *
+ * Theming works the same way as the app: every colour is a variable, the light
+ * values live in :root and the dark ones override them under [data-theme="dark"].
+ * Language is handled by showing/hiding .t-en / .t-fa, so the page renders in the
+ * right language on the first paint without waiting for JavaScript.
+ */
+
+:root {
+  --bg: #f5f7fb;
+  --surface: #ffffff;
+  --line: #e4e8f0;
+  --text: #14161b;
+  --muted: #626b7a;
+  --accent: #2563eb;
+  --accent-dark: #1d4ed8;
+  --accent-soft: #e8f1ff;
+  --code-bg: #eef1f6;
+  --term-bg: #1a1d24;
+  --term-text: #e6e9ef;
+  --term-dim: #6f7787;
+  --shadow: 0 1px 2px rgba(16, 24, 40, .05), 0 12px 32px -16px rgba(16, 24, 40, .22);
+  --shadow-lg: 0 2px 4px rgba(16, 24, 40, .05), 0 30px 60px -28px rgba(16, 24, 40, .35);
+  --radius: 16px;
+  --font: "Segoe UI Variable", "Segoe UI", Inter, system-ui, -apple-system, "Noto Sans",
+          Ubuntu, Cantarell, "Vazirmatn", sans-serif;
+  --mono: "Cascadia Code", "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --maxw: 1060px;
+}
+
+:root[data-theme="dark"] {
+  --bg: #0e1015;
+  --surface: #171a21;
+  --line: #2a2f3a;
+  --text: #e8eaef;
+  --muted: #98a1b0;
+  --accent: #5b8def;
+  --accent-dark: #7ba4f5;
+  --accent-soft: #1b2740;
+  --code-bg: #222731;
+  --term-bg: #0a0c10;
+  --term-text: #e6e9ef;
+  --term-dim: #6b7383;
+  --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 12px 32px -16px rgba(0, 0, 0, .8);
+  --shadow-lg: 0 2px 4px rgba(0, 0, 0, .5), 0 30px 60px -28px rgba(0, 0, 0, .9);
+}
+
+* { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 16px;
+  line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3 { margin: 0 0 .5rem; font-weight: 680; letter-spacing: -.015em; line-height: 1.25; }
+p { margin: 0 0 .8rem; }
+p:last-child { margin-bottom: 0; }
+a { color: var(--accent); }
+code, .mono { font-family: var(--mono); font-size: .88em; }
+code { background: var(--code-bg); padding: .12rem .38rem; border-radius: 5px; }
+
+/* --------------------------------------------------------------- language */
+
+:root[data-lang="en"] .t-fa { display: none !important; }
+:root[data-lang="fa"] .t-en { display: none !important; }
+:root[data-lang="en"] .lang-fa-only { display: none !important; }
+:root[data-lang="fa"] .lang-en-only { display: none !important; }
+
+/* Persian gets a slightly larger line height: the script is denser and taller. */
+:root[data-lang="fa"] body { line-height: 1.85; }
+:root[data-lang="fa"] h1 { line-height: 1.4; }
+:root[data-lang="fa"] h2, :root[data-lang="fa"] h3 { line-height: 1.5; letter-spacing: 0; }
+/* Latin words inside a Persian sentence must not be reordered by the bidi algorithm.
+   `isolate` alone is not enough for text that starts with a neutral character: in an
+   RTL paragraph the bidi algorithm moves a leading "." to the other side, so ".deb"
+   would read as "deb.". These spans hold technical tokens that are left-to-right by
+   nature, so they are given their own LTR direction as well as isolation. */
+:root[data-lang="fa"] .mono,
+:root[data-lang="fa"] code,
+:root[data-lang="fa"] .tags li {
+  unicode-bidi: isolate;
+  direction: ltr;
+}
+/* A tag is a small block, so in the RTL layout it should still sit flush to the
+   start of the (mirrored) column rather than drifting left. */
+:root[data-lang="fa"] .tags { justify-content: flex-start; }
+
+/* ------------------------------------------------------------------- bar */
+
+.bar {
+  position: sticky; top: 0; z-index: 20;
+  display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+  padding: .7rem clamp(1rem, 4vw, 2rem);
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--line);
+}
+.brand { display: flex; align-items: center; gap: .65rem; text-decoration: none; color: inherit; }
+.mark {
+  width: 36px; height: 36px; flex: 0 0 auto; border-radius: 10px;
+  background: linear-gradient(140deg, var(--accent), #7c3aed);
+  color: #fff; display: grid; place-items: center; font-weight: 700; font-size: 1.05rem;
+}
+.brand-text { display: flex; flex-direction: column; line-height: 1.25; }
+.brand-text strong { font-size: .98rem; font-weight: 700; }
+.brand-text span { font-size: .76rem; color: var(--muted); }
+.bar-actions { display: flex; gap: .4rem; }
+
+.btn-icon {
+  height: 36px; min-width: 36px; padding: 0 .6rem;
+  display: inline-flex; align-items: center; justify-content: center;
+  font: inherit; font-size: .8rem; font-weight: 650; white-space: nowrap;
+  border: 1px solid var(--line); border-radius: 10px;
+  background: var(--surface); color: var(--muted); cursor: pointer;
+  transition: background .15s, color .15s, border-color .15s;
+}
+.btn-icon:hover { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
+.btn-icon:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent); }
+.btn-icon svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+.btn-icon .i-sun, .btn-icon .i-moon { display: none; }
+:root[data-theme="light"] .btn-icon .i-moon { display: block; }
+:root[data-theme="dark"] .btn-icon .i-sun { display: block; }
+
+/* ------------------------------------------------------------------ hero */
+
+.hero {
+  position: relative; overflow: hidden;
+  padding: clamp(3rem, 9vw, 5.5rem) clamp(1rem, 4vw, 2rem) clamp(2.5rem, 6vw, 4rem);
+  text-align: center;
+}
+/* A soft two-colour glow behind the headline. */
+.hero::before {
+  content: ""; position: absolute; inset: -40% 50% auto -20%; height: 620px;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--accent) 22%, transparent), transparent);
+  filter: blur(20px); pointer-events: none;
+}
+.hero::after {
+  content: ""; position: absolute; inset: -30% -20% auto 45%; height: 560px;
+  background: radial-gradient(closest-side, color-mix(in srgb, #7c3aed 18%, transparent), transparent);
+  filter: blur(20px); pointer-events: none;
+}
+.hero-inner { position: relative; max-width: 760px; margin: 0 auto; }
+.pill {
+  display: inline-block; margin-bottom: 1.1rem;
+  font-size: .78rem; font-weight: 650; letter-spacing: .02em;
+  padding: .32rem .8rem; border-radius: 999px;
+  background: var(--accent-soft); color: var(--accent);
+}
+.hero h1 { font-size: clamp(1.85rem, 5.2vw, 3rem); margin-bottom: .9rem; }
+.lead { font-size: clamp(1rem, 2.2vw, 1.12rem); color: var(--muted); max-width: 56ch; margin: 0 auto 1.6rem; }
+.cta { display: flex; gap: .6rem; justify-content: center; flex-wrap: wrap; }
+
+.btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  font: inherit; font-weight: 620; font-size: .94rem; text-decoration: none;
+  padding: .68rem 1.3rem; border-radius: 11px; border: 1px solid var(--line);
+  background: var(--surface); color: var(--text); cursor: pointer;
+  transition: background .15s, border-color .15s, transform .06s;
+}
+.btn:hover { transform: translateY(-1px); }
+.btn:active { transform: translateY(0); }
+.btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn-primary:hover { background: var(--accent-dark); border-color: var(--accent-dark); }
+.btn-ghost:hover { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+
+/* --------------------------------------------------------------- layout */
+
+.wrap { max-width: var(--maxw); margin: 0 auto; padding: 0 clamp(1rem, 4vw, 2rem) 2.5rem; }
+
+.section-title {
+  font-size: clamp(1.4rem, 3.4vw, 1.9rem);
+  margin: 2.5rem 0 1.4rem; text-align: center;
+}
+
+.card {
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--radius); box-shadow: var(--shadow);
+  padding: clamp(1.2rem, 3vw, 1.8rem);
+}
+.intro { text-align: center; }
+.intro h2 { font-size: 1.3rem; }
+.intro p { color: var(--muted); max-width: 62ch; margin: 0 auto; font-size: 1.02rem; }
+
+.two-col { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem; }
+.two-col h2 { font-size: 1.15rem; }
+
+/* --------------------------------------------------------------- steps */
+
+.steps { list-style: none; margin: 0 0 1.2rem; padding: 0; display: grid; gap: .8rem; }
+.steps li {
+  display: flex; gap: .9rem; align-items: flex-start;
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: 13px; padding: 1rem 1.1rem; box-shadow: var(--shadow);
+}
+.step-num {
+  width: 30px; height: 30px; flex: 0 0 auto; border-radius: 9px;
+  background: var(--accent-soft); color: var(--accent);
+  display: grid; place-items: center; font-weight: 700; font-size: .92rem;
+}
+.steps h3 { font-size: 1rem; margin-bottom: .15rem; }
+.steps p { font-size: .92rem; color: var(--muted); margin: 0; }
+
+/* ------------------------------------------------------------ terminal */
+
+.terminal {
+  background: var(--term-bg); border-radius: 13px; overflow: hidden;
+  box-shadow: var(--shadow-lg); border: 1px solid var(--line);
+}
+.terminal-bar { display: flex; gap: .38rem; padding: .6rem .8rem; border-bottom: 1px solid rgba(255,255,255,.07); }
+.terminal-bar span { width: 11px; height: 11px; border-radius: 50%; background: #4b5563; }
+.terminal-bar span:first-child { background: #ef6b62; }
+.terminal-bar span:nth-child(2) { background: #f5bd4f; }
+.terminal-bar span:nth-child(3) { background: #63c98a; }
+.terminal pre { margin: 0; padding: 1rem 1.15rem 1.15rem; overflow-x: auto; }
+.terminal code {
+  background: none; padding: 0; color: var(--term-text);
+  font-size: .89rem; line-height: 1.85; direction: ltr; display: block;
+  text-align: left; unicode-bidi: isolate;
+}
+.c-dim { color: var(--term-dim); user-select: none; }
+
+.after { margin-top: 1rem; color: var(--muted); font-size: .95rem; text-align: center; }
+
+/* ------------------------------------------------------------ features */
+
+.feature {
+  display: grid; grid-template-columns: 1fr; gap: 1.3rem;
+  align-items: center; margin-bottom: 2.6rem;
+}
+.feature-text h3 { font-size: 1.28rem; }
+.feature-text p { color: var(--muted); }
+.feature-text .tags { margin-top: .9rem; }
+
+.tags { list-style: none; display: flex; flex-wrap: wrap; gap: .4rem; margin: 0; padding: 0; }
+.tags li {
+  font-family: var(--mono); font-size: .78rem; font-weight: 600;
+  padding: .22rem .55rem; border-radius: 7px;
+  background: var(--code-bg); color: var(--muted);
+}
+
+/* The screenshot sits in a small browser-chrome frame so it reads as a real
+   window rather than a floating picture. */
+.shot { margin: 0; }
+.shot img {
+  display: block; width: 100%; height: auto; border-radius: 12px;
+  border: 1px solid var(--line); box-shadow: var(--shadow-lg);
+  background: var(--surface);
+}
+
+@media (min-width: 860px) {
+  .feature { grid-template-columns: 1fr 1.25fr; gap: 2.2rem; }
+  .feature.flip .feature-text { order: 2; }
+  .feature.flip .shot { order: 1; }
+  .feature-text { max-width: 40ch; }
+}
+
+/* -------------------------------------------------------------- ticks */
+
+.ticks { list-style: none; margin: 0; padding: 0; display: grid; gap: .55rem; }
+.ticks li { position: relative; padding-inline-start: 1.7rem; font-size: .94rem; color: var(--muted); }
+.ticks li::before {
+  content: ""; position: absolute; inset-inline-start: 0; top: .48em;
+  width: 15px; height: 15px; border-radius: 50%;
+  background: var(--accent-soft) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%232563eb' stroke-width='3.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 12.5l5 5L20 6.5'/%3E%3C/svg%3E") center/10px no-repeat;
+}
+
+/* --------------------------------------------------------------- more */
+
+.more { text-align: center; }
+.more h2 { font-size: 1.2rem; }
+.more p { color: var(--muted); max-width: 58ch; margin: 0 auto 1.1rem; }
+.more .cta { justify-content: center; }
+
+.foot {
+  border-top: 1px solid var(--line); padding: 1.6rem 1rem 2.2rem;
+  text-align: center; color: var(--muted); font-size: .86rem;
+}

@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="{{ html_lang }}" dir="{{ html_dir }}" data-lang="{{ lang }}" data-theme="{{ theme }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="{{ theme }}">
+<title>{% block title %}SLPM{% endblock %}</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+<script>
+/* Applied before the first paint, so a dark page never flashes white. prefs.js
+   loads later and owns the button; this only reads the choice already stored. */
+(function () {
+  var m = document.cookie.match(/(?:^|;\s*)slpm_theme=(dark|light)/);
+  if (m) document.documentElement.dataset.theme = m[1];
+})();
+</script>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <div class="logo">S</div>
+    <div>
+      <h1>{{ t('Simple Linux Package Manager') }}</h1>
+      <p class="muted small">{{ env.distro }}</p>
+    </div>
+  </div>
+  <nav class="tabs">
+    <a href="{{ url_for('page_install') }}" class="tab {{ 'active' if page == 'install' }}">{{ t('Install') }}</a>
+    <a href="{{ url_for('page_apps') }}" class="tab {{ 'active' if page == 'apps' }}">{{ t('Installed Apps') }}</a>
+  </nav>
+  <div class="env">
+    <span class="pill {{ 'warn' if not env.helper_up and not env.is_root }}" id="helper-pill">
+      {% if env.is_root %}{{ t('Running as root') }}
+      {% elif env.helper_up %}{{ t('Admin access ready') }}
+      {% else %}{{ t('Admin access on demand') }}{% endif %}
+    </span>
+  </div>
+  <div class="prefs">
+    <button type="button" class="icon-btn" id="lang-toggle"
+            aria-label="{{ t('Switch language') }}" title="{{ t('Switch language') }}">
+        <span class="lang-fa">فارسی</span><span class="lang-en">English</span>
+    </button>
+    <button type="button" class="icon-btn" id="theme-toggle"
+            aria-label="{{ t('Switch to dark theme') if theme == 'light' else t('Switch to light theme') }}"
+            title="{{ t('Switch to dark theme') if theme == 'light' else t('Switch to light theme') }}"
+            aria-pressed="{{ 'true' if theme == 'dark' else 'false' }}">
+      <svg class="icon-moon" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M20 14.5A8.5 8.5 0 019.5 4a7 7 0 108.5 10.5z"/>
+      </svg>
+      <svg class="icon-sun" viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="12" cy="12" r="4.2"/>
+        <path d="M12 2.5v2.2M12 19.3v2.2M4.2 12H2M22 12h-2.2M5.6 5.6L4 4M20 20l-1.6-1.6M18.4 5.6L20 4M4 20l1.6-1.6"/>
+      </svg>
+    </button>
+  </div>
+</header>
+
+<main>
+  {% block content %}{% endblock %}
+</main>
+
+<div id="toasts" class="toasts"></div>
+<div id="overlay" class="overlay hidden">
+  <div class="modal" id="modal"></div>
+</div>
+
+<script src="{{ url_for('static', filename='js/prefs.js') }}"></script>
+<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

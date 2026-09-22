@@ -1,0 +1,355 @@
+:root {
+  --bg: #f4f6fa;
+  --surface: #ffffff;
+  --line: #e3e7ef;
+  --text: #16181d;
+  --muted: #6b7280;
+  --accent: #2563eb;
+  --accent-dark: #1d4ed8;
+  --danger: #dc2626;
+  --warn: #b45309;
+  --ok: #15803d;
+  --radius: 14px;
+  --shadow: 0 1px 2px rgba(16, 24, 40, .06), 0 8px 24px -12px rgba(16, 24, 40, .18);
+  --font: "Segoe UI Variable", "Segoe UI", Inter, system-ui, -apple-system, "Noto Sans", Ubuntu, Cantarell, sans-serif;
+  --mono: "Cascadia Code", "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+  /* Fills that were previously hard-coded hex values. They are variables so the dark
+     theme can redefine them in one place instead of overriding every rule below. */
+  --inset: #eef1f6;          /* segmented controls, code, tags, progress track */
+  --field: #fbfcfe;          /* text inputs at rest */
+  --field-focus: #ffffff;
+  --hover: #f3f5f9;          /* neutral button hover */
+  --hover-line: #cfd6e3;     /* card border on hover */
+  --icon-bg: #f2f4f8;
+  --icon-letter: #98a1b0;
+  --search-icon: #9aa3b2;
+  --spinner-track: #dbe1ea;
+  --body-text-soft: #374151; /* modal paragraphs */
+  --info-bg: #e8f1ff;        /* the "admin access" pill */
+  --info-text: #1d4ed8;
+  --warn-bg: #fff5e5;
+  --warn-line: #f6dfb8;
+  --warn-text: #7c4a03;
+  --danger-bg: #fdeaea;
+  --danger-line: #f8d4d4;
+  --danger-text: #8c1d1d;
+  --ok-bg: #e7f6ec;
+  --choice-hover: #f2f7ff;
+  --drop-active: #eef4ff;
+  --focus-ring: rgba(37, 99, 235, .15);
+  --overlay: rgba(15, 23, 42, .45);
+  --danger-strong: #b91c1c;
+}
+
+/* The dark palette. Not an inversion of the light one: surfaces stay a little above
+   the page background, and the accent is lightened so it keeps its contrast against
+   a dark surface. Everything else is the same variables the light theme sets. */
+:root[data-theme="dark"] {
+  --bg: #0f1116;
+  --surface: #171a21;
+  --line: #2a2f3a;
+  --text: #e8eaef;
+  --muted: #9aa3b2;
+  --accent: #5b8def;
+  --accent-dark: #7ba4f5;
+  --danger: #f07171;
+  --warn: #e0a45e;
+  --ok: #63c98a;
+  --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 8px 24px -12px rgba(0, 0, 0, .7);
+
+  --inset: #1e222b;
+  --field: #12151b;
+  --field-focus: #12151b;
+  --hover: #232833;
+  --hover-line: #3a4150;
+  --icon-bg: #222731;
+  --icon-letter: #7d8595;
+  --search-icon: #7d8595;
+  --spinner-track: #333a47;
+  --body-text-soft: #c3c9d4;
+  --info-bg: #1b2740;
+  --info-text: #9dc0ff;
+  --warn-bg: #33270f;
+  --warn-line: #4d3a17;
+  --warn-text: #f0c483;
+  --danger-bg: #38191b;
+  --danger-line: #55262a;
+  --danger-text: #ffb4b4;
+  --ok-bg: #14301f;
+  --choice-hover: #1c2536;
+  --drop-active: #1a2338;
+  --focus-ring: rgba(91, 141, 239, .28);
+  --overlay: rgba(0, 0, 0, .6);
+  --danger-strong: #d05050;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3 { margin: 0 0 .25rem; font-weight: 650; letter-spacing: -.01em; }
+h1 { font-size: 1.05rem; }
+h2 { font-size: 1.45rem; }
+h3 { font-size: 1.05rem; }
+p  { margin: .25rem 0; }
+code { font-family: var(--mono); background: var(--inset); padding: .1rem .35rem; border-radius: 5px; font-size: .85em; }
+.muted { color: var(--muted); }
+.small { font-size: .82rem; }
+.hidden { display: none !important; }
+.row { display: flex; align-items: center; }
+.row-between { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+.gap { gap: .6rem; margin-top: .9rem; }
+
+/* ------------------------------------------------------------------ chrome */
+.topbar {
+  display: flex; align-items: center; gap: 2rem;
+  padding: .85rem 1.6rem;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+  position: sticky; top: 0; z-index: 20;
+}
+.brand { display: flex; align-items: center; gap: .7rem; }
+.logo {
+  width: 38px; height: 38px; border-radius: 11px;
+  background: linear-gradient(140deg, var(--accent), #7c3aed);
+  color: #fff; display: grid; place-items: center;
+  font-weight: 700; font-size: 1.1rem;
+}
+.brand p { margin: 0; }
+.tabs { display: flex; gap: .35rem; margin-left: auto; background: var(--inset); padding: .25rem; border-radius: 11px; }
+.tab {
+  padding: .45rem 1.05rem; border-radius: 9px; text-decoration: none;
+  color: var(--muted); font-weight: 550; font-size: .92rem;
+}
+.tab:hover { color: var(--text); }
+.tab.active { background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
+.pill {
+  font-size: .78rem; font-weight: 600; padding: .35rem .7rem; border-radius: 999px;
+  background: var(--info-bg); color: var(--info-text); white-space: nowrap;
+}
+.pill.warn { background: var(--warn-bg); color: var(--warn); }
+
+/* ------------------------------------------------------- language / theme
+   Two small buttons at the far end of the top bar. The theme one is icon-only; the
+   language one shows a word, so it sizes to its text rather than to the icon box. */
+.prefs { display: flex; gap: .35rem; align-items: center; }
+.icon-btn {
+  height: 36px; min-width: 36px; padding: 0 .5rem; flex: 0 0 auto;
+  display: inline-flex; align-items: center; justify-content: center;
+  font: inherit; border: 1px solid var(--line); border-radius: 10px;
+  background: var(--surface); color: var(--muted); cursor: pointer;
+  transition: background .15s, border-color .15s, color .15s;
+}
+.icon-btn:hover { background: var(--hover); color: var(--text); }
+.icon-btn:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--focus-ring); }
+.icon-btn svg { width: 19px; height: 19px; flex: 0 0 auto; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+/* Only one of the two glyphs inside the theme button is ever shown. */
+.icon-btn .icon-sun, .icon-btn .icon-moon { display: none; }
+:root[data-theme="light"] .icon-btn .icon-moon { display: block; }
+:root[data-theme="dark"] .icon-btn .icon-sun { display: block; }
+/* The language button names the language you would switch *to*, in that language. */
+.lang-en { display: none; }
+:root[data-lang="fa"] .lang-en { display: inline; }
+:root[data-lang="fa"] .lang-fa { display: none; }
+.lang-toggle { font-size: .8rem; font-weight: 650; letter-spacing: .01em; white-space: nowrap; }
+
+main { max-width: 1080px; margin: 0 auto; padding: 1.8rem 1.6rem 4rem; }
+
+/* ------------------------------------------------------------------- cards */
+.card {
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--radius); box-shadow: var(--shadow);
+  padding: 1.25rem 1.35rem; margin-bottom: 1.1rem;
+}
+.hero { margin-bottom: 1.2rem; }
+.hero p { max-width: 62ch; }
+
+/* ------------------------------------------------------------------ inputs */
+.label { display: block; font-weight: 600; font-size: .85rem; margin-bottom: .45rem; }
+input[type=text], input[type=search], .select {
+  width: 100%; padding: .7rem .85rem; font: inherit; color: var(--text);
+  background: var(--field); border: 1px solid var(--line); border-radius: 10px;
+  transition: border-color .15s, box-shadow .15s;
+}
+input:focus, .select:focus {
+  outline: none; border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--focus-ring); background: var(--field-focus);
+}
+.drop { display: flex; gap: .6rem; align-items: stretch; }
+.drop.dragover input { border-color: var(--accent); background: var(--drop-active); border-style: dashed; }
+.select { width: auto; min-width: 165px; cursor: pointer; }
+
+.btn {
+  font: inherit; font-weight: 600; padding: .62rem 1.15rem; border-radius: 10px;
+  border: 1px solid var(--line); background: var(--surface); color: var(--text);
+  cursor: pointer; transition: background .15s, border-color .15s, transform .05s;
+}
+.btn:hover:not(:disabled) { background: var(--hover); }
+.btn:active:not(:disabled) { transform: translateY(1px); }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+.btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn-primary:hover:not(:disabled) { background: var(--accent-dark); }
+.btn-danger { background: var(--danger); border-color: var(--danger); color: #fff; }
+.btn-danger:hover:not(:disabled) { background: var(--danger-strong); }
+.btn-ghost { background: transparent; }
+.btn-block { width: 100%; }
+
+/* ---------------------------------------------------------------- install */
+.detect { margin-top: .9rem; font-size: .9rem; }
+.detect .tag { margin-right: .5rem; }
+.tag {
+  display: inline-block; font-size: .74rem; font-weight: 700; letter-spacing: .02em;
+  padding: .2rem .55rem; border-radius: 6px; background: var(--inset); color: var(--muted);
+  font-family: var(--mono);
+}
+.tag.ok { background: var(--ok-bg); color: var(--ok); }
+.tag.bad { background: var(--danger-bg); color: var(--danger); }
+.grid-formats { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: .9rem; margin-top: .9rem; }
+.format { border: 1px solid var(--line); border-radius: 11px; padding: .85rem; }
+.format p { font-size: .86rem; color: var(--muted); margin-top: .5rem; }
+.progress-head { display: flex; align-items: center; gap: .85rem; }
+.bar { height: 6px; background: var(--inset); border-radius: 999px; overflow: hidden; margin-top: .9rem; }
+.bar-fill {
+  height: 100%; width: 35%; border-radius: 999px;
+  background: linear-gradient(90deg, var(--accent), #7c3aed);
+  animation: slide 1.15s ease-in-out infinite;
+}
+@keyframes slide {
+  0% { margin-left: -35%; } 100% { margin-left: 100%; }
+}
+.spinner {
+  width: 20px; height: 20px; flex: 0 0 auto; border-radius: 50%;
+  border: 2.5px solid var(--spinner-track); border-top-color: var(--accent);
+  animation: spin .8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ------------------------------------------------------------------- apps */
+.switcher { display: flex; background: var(--inset); padding: .25rem; border-radius: 11px; }
+.switch {
+  font: inherit; font-weight: 600; font-size: .9rem; padding: .48rem 1.1rem;
+  border: 0; background: transparent; color: var(--muted); border-radius: 9px; cursor: pointer;
+}
+.switch.active { background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
+.toolbar { display: flex; gap: .7rem; align-items: center; flex-wrap: wrap; }
+.search-wrap { position: relative; flex: 1 1 260px; }
+.search-wrap input { padding-left: 2.4rem; }
+.search-icon { position: absolute; left: .7rem; top: 50%; transform: translateY(-50%); width: 18px; height: 18px; fill: var(--search-icon); }
+
+.list { display: grid; grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); gap: .8rem; align-items: stretch; }
+.list.rows { grid-template-columns: 1fr; }
+.item {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+  padding: .8rem .9rem; display: flex; gap: .85rem; align-items: center;
+  box-shadow: 0 1px 2px rgba(16,24,40,.04); min-width: 0;
+}
+.item:hover { border-color: var(--hover-line); }
+.item .icon {
+  width: 44px; height: 44px; flex: 0 0 auto; border-radius: 10px;
+  background: var(--icon-bg); display: grid; place-items: center; overflow: hidden;
+}
+.item .icon img { width: 32px; height: 32px; object-fit: contain; }
+.item .icon .letter { font-weight: 700; color: var(--icon-letter); font-size: 1.05rem; }
+.item .meta { min-width: 0; flex: 1 1 auto; overflow: hidden; }
+.item .meta .title-line { display: flex; align-items: center; gap: .4rem; min-width: 0; }
+.item .meta strong { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.item .meta span { display: block; font-size: .82rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.item .actions { display: flex; gap: .35rem; flex: 0 0 auto; margin-left: auto; }
+.item .actions .btn { padding: .42rem .7rem; font-size: .82rem; }
+.badge { font-size: .7rem; font-weight: 700; padding: .12rem .4rem; border-radius: 5px; background: var(--inset); color: var(--muted); flex: 0 0 auto; }
+.badge.danger { background: var(--danger-bg); color: var(--danger); }
+.badge.essential { background: var(--warn-bg); color: var(--warn); }
+.loader { display: flex; align-items: center; gap: .7rem; color: var(--muted); justify-content: center; padding: 2.5rem; }
+.empty { text-align: center; padding: 3rem 1rem; color: var(--muted); }
+
+/* ------------------------------------------------------------------ modal */
+.overlay {
+  position: fixed; inset: 0; background: var(--overlay);
+  display: grid; place-items: center; padding: 1.2rem; z-index: 60;
+  backdrop-filter: blur(2px);
+}
+.modal {
+  background: var(--surface); border-radius: 16px; width: min(560px, 100%);
+  max-height: 86vh; overflow: auto; padding: 1.4rem 1.5rem;
+  box-shadow: 0 24px 60px -20px rgba(16, 24, 40, .5);
+}
+.modal h3 { font-size: 1.15rem; margin-bottom: .6rem; }
+.modal p { color: var(--body-text-soft); }
+.modal .warn-box {
+  background: var(--warn-bg); border: 1px solid var(--warn-line); color: var(--warn-text);
+  border-radius: 11px; padding: .8rem .9rem; margin: .8rem 0; font-size: .9rem;
+}
+.modal .danger-box { background: var(--danger-bg); border-color: var(--danger-line); color: var(--danger-text); }
+.modal .footer { display: flex; justify-content: flex-end; gap: .6rem; margin-top: 1.1rem; }
+.modal ul.detail { margin: .6rem 0; padding-left: 1.1rem; font-size: .87rem; color: var(--muted); }
+.modal .choices { display: grid; gap: .4rem; margin: .8rem 0; }
+.modal .choice {
+  text-align: left; padding: .6rem .75rem; border: 1px solid var(--line);
+  border-radius: 10px; background: var(--field); cursor: pointer; font: inherit;
+}
+.modal .choice:hover { border-color: var(--accent); background: var(--choice-hover); }
+.modal .choice small { display: block; color: var(--muted); font-family: var(--mono); font-size: .76rem; }
+.confirm-input { margin-top: .7rem; }
+dl.kv { display: grid; grid-template-columns: 130px 1fr; gap: .35rem .8rem; font-size: .88rem; margin: .8rem 0 0; }
+dl.kv dt { color: var(--muted); }
+dl.kv dd { margin: 0; overflow-wrap: anywhere; }
+
+/* ----------------------------------------------------------------- toasts */
+.toasts { position: fixed; right: 1.2rem; bottom: 1.2rem; display: grid; gap: .6rem; z-index: 80; width: min(400px, calc(100vw - 2.4rem)); }
+.toast {
+  background: var(--surface); border-left: 4px solid var(--accent);
+  border-radius: 11px; padding: .75rem .9rem; box-shadow: var(--shadow);
+  animation: pop .18s ease-out;
+}
+.toast.ok { border-left-color: var(--ok); }
+.toast.bad { border-left-color: var(--danger); }
+.toast strong { display: block; font-size: .92rem; }
+.toast p { font-size: .85rem; color: var(--muted); margin-top: .15rem; }
+.toast .close { float: right; border: 0; background: none; cursor: pointer; color: var(--muted); font-size: 1rem; line-height: 1; }
+@keyframes pop { from { opacity: 0; transform: translateY(6px); } }
+
+@media (max-width: 900px) {
+  .list { grid-template-columns: 1fr; }
+  .topbar { flex-wrap: wrap; gap: .8rem; }
+  .tabs { margin-left: 0; order: 3; width: 100%; }
+  .tab { flex: 1; text-align: center; }
+  main { padding: 1.2rem 1rem 3rem; }
+  .switcher { width: 100%; }
+  .switch { flex: 1; }
+}
+
+/* ------------------------------------------------------------------- RTL
+   Only a handful of rules assume the text runs left to right; the layout is
+   otherwise flex- and grid-based and mirrors itself. These are the exceptions,
+   written against <html dir="rtl"> so English is untouched. */
+:root[dir="rtl"] body { font-family: var(--font); }
+/* Search icon sits at the start of its field, whichever side that is. */
+:root[dir="rtl"] .search-icon { left: auto; right: .7rem; }
+:root[dir="rtl"] .search-wrap input { padding-left: .85rem; padding-right: 2.4rem; }
+/* The accent stripe on a toast marks its leading edge. */
+:root[dir="rtl"] .toast { border-left: 0; border-right: 4px solid var(--accent); }
+:root[dir="rtl"] .toast.ok { border-right-color: var(--ok); }
+:root[dir="rtl"] .toast.bad { border-right-color: var(--danger); }
+:root[dir="rtl"] .toast .close { float: left; }
+/* Package detail lists read right-to-left. */
+:root[dir="rtl"] dl.kv dd { text-align: right; }
+:root[dir="rtl"] .modal .choice { text-align: right; }
+/* Latin package names and file paths must not be reordered by the bidi algorithm. */
+.path-ltr, code, .tag, dl.kv dd, .item .meta strong, .modal code {
+  unicode-bidi: isolate;
+}
+.path-ltr, dl.kv dd, code, .tag, .item .meta strong, .modal code { direction: ltr; text-align: inherit; }
+:root[dir="rtl"] dl.kv dd, :root[dir="rtl"] code, :root[dir="rtl"] .tag,
+:root[dir="rtl"] .item .meta strong, :root[dir="rtl"] .modal code { text-align: right; }
+/* A Persian-heavy list is easier to scan right-aligned, but the rows themselves
+   stay mirrored by the flex container. */
+:root[dir="rtl"] .item .meta span { text-align: right; }
