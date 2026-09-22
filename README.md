@@ -9,6 +9,7 @@ A simple local web app for installing, viewing, launching, and removing Linux so
 ## Features
 
 - Simple and Advanced views for installed applications and packages
+- A Startup Apps tab that lists what a session starts by itself, with one-click adding and removal
 - Support for `.deb`, AppImage, Flatpak references, archives, and installer files
 - Automatic detection of available `apt`, Flatpak, and Snap tools
 - English and Persian interface with light and dark themes
@@ -48,6 +49,7 @@ python selftest.py
 ```text
 app.py              Flask application entry point
 slpm/               Package and desktop-integration logic
+                    (autostart.py manages the startup-program entries)
 templates/          HTML templates
 static/             CSS and JavaScript assets
 docs/               GitHub Pages website

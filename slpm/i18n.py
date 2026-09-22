@@ -282,4 +282,42 @@ _FA = {
     "This can take a minute. Keep this window open.":
         "ممکن است یک دقیقه طول بکشد. این پنجره را باز نگه دارید.",
     "Reading installed programs…": "در حال خواندن برنامه‌های نصب‌شده…",
+
+    # --------------------------------------------------------------- autostart
+    # The backend half of the Startup Apps page. Every one of these is raised from
+    # slpm/autostart.py and carries a program name in Latin script on purpose.
+    "This program has no name, so it cannot be added.":
+        "این برنامه نامی ندارد، پس نمی‌شود اضافه‌اش کرد.",
+    "This program has no command to run.":
+        "این برنامه فرمانی برای اجرا ندارد.",
+    "The command for this program was not found on this computer.":
+        "فرمان این برنامه روی این کامپیوتر پیدا نشد.",
+    "{name} already starts when you log in.":
+        "{name} از قبل هنگام ورود شما اجرا می‌شود.",
+    "{name} will now start when you log in.":
+        "از این پس {name} هنگام ورود شما اجرا می‌شود.",
+    "{name} will no longer start when you log in.":
+        "از این پس {name} هنگام ورود شما اجرا نمی‌شود.",
+    "This startup entry is no longer there.":
+        "این مورد از برنامه‌های هنگام ورود دیگر وجود ندارد.",
+    "This startup entry could not be read.":
+        "این مورد از برنامه‌های هنگام ورود خوانده نشد.",
+    "This startup entry could not be removed.":
+        "این مورد از برنامه‌های هنگام ورود حذف نشد.",
+    "This entry belongs to the system and cannot be deleted. Turn it off instead.":
+        "این مورد متعلق به سیستم است و حذف نمی‌شود. به‌جایش خاموشش کنید.",
+    "{name} was removed from your startup apps.":
+        "{name} از برنامه‌های هنگام ورود شما حذف شد.",
+
+    "Startup Apps": "برنامه‌های هنگام ورود",
+    "Startup apps": "برنامه‌های هنگام ورود",
+    "Programs that start by themselves when you log in.":
+        "برنامه‌هایی که هنگام ورود شما خودکار اجرا می‌شوند.",
+    "Add startup app": "افزودن برنامهٔ هنگام ورود",
+    "Search startup apps…": "جست‌وجوی برنامه‌های هنگام ورود…",
+    "Added by you": "افزودهٔ شما",
+    "System": "سیستم",
+    "Turned off": "خاموش",
+    "No startup programs matched.": "برنامهٔ هنگام ورودی مطابقت نداشت.",
+    "Reading startup programs…": "در حال خواندن برنامه‌های هنگام ورود…",
 }

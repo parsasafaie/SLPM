@@ -268,6 +268,19 @@ input:focus, .select:focus {
 .badge { font-size: .7rem; font-weight: 700; padding: .12rem .4rem; border-radius: 5px; background: var(--inset); color: var(--muted); flex: 0 0 auto; }
 .badge.danger { background: var(--danger-bg); color: var(--danger); }
 .badge.essential { background: var(--warn-bg); color: var(--warn); }
+/* A startup entry that is switched off is still listed - hiding it would leave no way to
+   switch it back on later - but it reads as inactive. */
+.item.off { opacity: .6; }
+/* The X on a startup row follows the window-close convention: a bare glyph that tints red
+   on hover, sized to sit quietly at the end of the row until it is wanted. */
+.close-x {
+  width: 30px; height: 30px; flex: 0 0 auto; display: grid; place-items: center;
+  border: 0; border-radius: 8px; background: transparent; color: var(--muted);
+  cursor: pointer; transition: background .15s, color .15s;
+}
+.close-x:hover { background: var(--danger-bg); color: var(--danger); }
+.close-x:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--focus-ring); color: var(--danger); }
+.close-x svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; }
 .loader { display: flex; align-items: center; gap: .7rem; color: var(--muted); justify-content: center; padding: 2.5rem; }
 .empty { text-align: center; padding: 3rem 1rem; color: var(--muted); }
 

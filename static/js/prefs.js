@@ -148,6 +148,35 @@ const SLPM = (() => {
     'Cleaned up': 'پاک‌سازی شد',
     'Cleanup failed': 'پاک‌سازی انجام نشد',
 
+    /* --------------------------------------------------------- startup.js */
+    'No applications matched.': 'برنامه‌ای مطابقت نداشت.',
+    'Could not list startup apps': 'فهرست برنامه‌های هنگام ورود خوانده نشد',
+    'Reading startup programs…': 'در حال خواندن برنامه‌های هنگام ورود…',
+    'yours': 'مال شما',
+    'turned off': 'خاموش',
+    'Saving…': 'در حال ذخیره…',
+    'Saved': 'ذخیره شد',
+    'Could not change this': 'تغییر انجام نشد',
+    'Turn off {name}': 'خاموش‌کردن {name}',
+    'Turn off {name}?': '{name} خاموش شود؟',
+    'Turn off': 'خاموش کن',
+    ['This app will no longer start when you log in. The application stays installed '
+      + 'and can still be opened from your menu.']:
+      'این برنامه دیگر هنگام ورود شما اجرا نمی‌شود. خود برنامه نصب‌شده می‌ماند و '
+      + 'همچنان از منوی شما باز می‌شود.',
+    'You can add it again later from Add startup app.':
+      'بعداً می‌توانید آن را از «افزودن برنامهٔ هنگام ورود» دوباره اضافه کنید.',
+    'Add a startup app': 'افزودن برنامهٔ هنگام ورود',
+    'Reading installed apps…': 'در حال خواندن برنامه‌های نصب‌شده…',
+    ['No installed application with a launch command was found.']:
+      'هیچ برنامهٔ نصب‌شده‌ای با فرمان اجرا پیدا نشد.',
+    ['Pick the application that should start when you log in.']:
+      'برنامه‌ای را انتخاب کنید که هنگام ورود شما اجرا شود.',
+    'Adding…': 'در حال افزودن…',
+    'Added': 'افزوده شد',
+    'Could not add': 'افزوده نشد',
+    'No startup programs matched.': 'برنامهٔ هنگام ورودی مطابقت نداشت.',
+
     /* The theme button's own label. The language button is labelled in the template,
        because the server knows the current language while it renders the page. */
     'Switch to dark theme': 'تغییر به تم تاریک',
@@ -232,6 +261,14 @@ const SLPM = (() => {
     [/^File not found: (.+)$/, 'فایل پیدا نشد: $1'],
     [/^(.+) is no longer in (.+)\. Extract the archive again\.$/,
      '$1 دیگر در $2 نیست. آرشیو را دوباره استخراج کنید.'],
+    /* The startup-app messages (slpm/autostart.py) carry a program name, so one pattern
+       covers every name rather than one catalog row per application. */
+    [/^(.+) already starts when you log in\.$/, '$1 از قبل هنگام ورود شما اجرا می‌شود.'],
+    [/^(.+) will now start when you log in\.$/, 'از این پس $1 هنگام ورود شما اجرا می‌شود.'],
+    [/^(.+) will no longer start when you log in\.$/,
+     'از این پس $1 هنگام ورود شما اجرا نمی‌شود.'],
+    [/^(.+) was removed from your startup apps\.$/,
+     '$1 از برنامه‌های هنگام ورود شما حذف شد.'],
   ];
 
   /** Translate one string (and any {name} values) into the current language. */

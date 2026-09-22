@@ -27,6 +27,7 @@
   <nav class="tabs">
     <a href="{{ url_for('page_install') }}" class="tab {{ 'active' if page == 'install' }}">{{ t('Install') }}</a>
     <a href="{{ url_for('page_apps') }}" class="tab {{ 'active' if page == 'apps' }}">{{ t('Installed Apps') }}</a>
+    <a href="{{ url_for('page_startup') }}" class="tab {{ 'active' if page == 'startup' }}">{{ t('Startup Apps') }}</a>
   </nav>
   <div class="env">
     <span class="pill {{ 'warn' if not env.helper_up and not env.is_root }}" id="helper-pill">

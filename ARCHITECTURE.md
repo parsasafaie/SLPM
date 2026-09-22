@@ -40,6 +40,7 @@ The application does not use a database or a remote service. Package-manager com
 - `slpm/appimage.py`: validates AppImages, places them under `~/Applications` and prepares menu launchers.
 - `slpm/desktop.py`: parses `.desktop` files, filters entries for Simple mode and creates/updates launchers.
 - `slpm/apps.py`: combines desktop entries and package-manager data into Simple and Advanced views.
+- `slpm/autostart.py`: reads the session's autostart entries, adds one for an installed application, and switches an entry off.
 - `slpm/proc.py`: the general subprocess boundary; uses argument arrays, fixed timeouts, environment normalization and structured `(return code, stdout, stderr)` results.
 - `slpm/helper.py`: short-lived Unix-socket bridge for privileged operations started through polkit or sudo.
 - `slpm/i18n.py`: English/Persian translations, locale normalization, interpolation and text direction.
@@ -58,6 +59,26 @@ An AppImage is kept in the user's application area, inspected for metadata and c
 ### Flatpak and Snap
 
 The application checks whether `flatpak` or `snap` exists before showing or executing the corresponding operation. Unsupported managers are not offered as available actions.
+
+### Startup applications
+
+The Startup Apps tab lists the `.desktop` files under `/etc/xdg/autostart` (what packages and
+the desktop environment start by themselves) and `~/.config/autostart` (the user's own).
+A user file with the same name as a packaged one overrides it, which is the Desktop Entry
+Specification's mechanism and the same one a desktop environment's own startup panel uses.
+
+Adding an application writes `~/.config/autostart/slpm-<name>.desktop` running the same command
+the application menu runs, so nothing has to be typed by hand. The name is prefixed so an entry
+SLPM writes can never overwrite a file the user already had under its own name. Adding a command
+that is already listed does not create a second entry, which would start the program twice.
+
+Switching an entry off is a deletion, and the UI asks for confirmation first because the entry
+then has to be added again to come back. A file SLPM wrote is removed. A packaged file cannot be
+deleted - it belongs to a package, and a reinstall would restore it - so it is masked with a user
+entry of the same name carrying `Hidden=true` instead. That keeps the operation free of root and
+never modifies a file the system owns.
+
+The tab performs no privileged work and never launches a program.
 
 ### Archives and scripts
 
@@ -80,6 +101,7 @@ The helper accepts only explicitly allowlisted package-manager calls, validates 
 Language and theme are browser cookies. The current request language is held in a `ContextVar`, so concurrent requests do not overwrite one another. Installation/removal jobs are protected by a process-local lock and expose active-job status to the UI.
 
 - User launchers and extracted archives: `~/.local/share/slpm/`
+- Startup entries added or overridden by hand: `~/.config/autostart/`
 - AppImages: `~/Applications`
 - Helper socket and runtime state: paths defined by `slpm/state.py`
 - Source dependencies: `requirements.txt`
@@ -88,7 +110,7 @@ Because state is local and the lock is process-local, this architecture is inten
 
 ## Verification and maintenance
 
-`selftest.py` exercises desktop-entry parsing, Simple/Advanced filtering, package safety classification, archive extraction, path-choice validation, privileged-command allowlisting, command probing, human-readable sizes and translations. It avoids actually installing or removing packages. Run it after changes with:
+`selftest.py` exercises desktop-entry parsing, Simple/Advanced filtering, package safety classification, archive extraction, path-choice validation, startup-entry flags and overrides, privileged-command allowlisting, command probing, human-readable sizes and translations. It avoids actually installing or removing packages. Run it after changes with:
 
 ```bash
 source .venv/bin/activate

@@ -20,7 +20,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT))
 
-from slpm import apps, apt, appimage, desktop, helper, i18n, installer, proc  # noqa: E402
+from slpm import (apps, apt, appimage, autostart, desktop, helper, i18n, installer,  # noqa: E402
+                  proc)
 
 # Runs inside node: load the browser catalog twice, once per language, and report every
 # T() call whose {placeholder} survives. Prints one line per failure, nothing on success.
@@ -236,6 +237,199 @@ with tempfile.TemporaryDirectory() as tmp:
           installer._resolve_choice({"path": str(Path(tmp) / ".." / "other")}, launchers), None)
     check("non-dict rejected", installer._resolve_choice("tool", launchers), None)
     check("missing path rejected", installer._resolve_choice({}, launchers), None)
+
+
+# --------------------------------------------------------- autostart files
+
+section("Startup apps: flags, overrides and the add/toggle/remove flow")
+
+# autostart.py keeps its two directories as module globals, so the flow test can point
+# them at a temporary pair. Nothing here reads or writes the real autostart directories,
+# and no program is launched.
+_REAL_AUTOSTART_DIRS = (autostart.USER_AUTOSTART, autostart.SYSTEM_AUTOSTART)
+
+
+def _desktop_text(name, exec_line, extra=""):
+    return ("[Desktop Entry]\nType=Application\nVersion=1.0\n"
+            f"Name={name}\nExec={exec_line}\n{extra}")
+
+
+# --- the two flags that together mean "do not start this"
+check("an entry with no flags starts", autostart.is_disabled({"Name": "x"}), False)
+check("Hidden=true is off", autostart.is_disabled({"Hidden": "true"}), True)
+check("Hidden=false stays on", autostart.is_disabled({"Hidden": "false"}), False)
+check("Hidden=True reads case-insensitively",
+      autostart.is_disabled({"Hidden": "True"}), True)
+check("X-GNOME-Autostart-enabled=false is off",
+      autostart.is_disabled({"X-GNOME-Autostart-enabled": "false"}), True)
+# An unrecognised value is not a decision, and must not be read as one: defaulting to
+# "off" here would disable entries whose flag is merely misspelled.
+check("an unreadable flag is not treated as off",
+      autostart.is_disabled({"Hidden": "maybe"}), False)
+check("Hidden wins over an enabled GNOME key",
+      autostart.is_disabled({"Hidden": "true",
+                             "X-GNOME-Autostart-enabled": "true"}), True)
+
+# --- Exec= field codes
+check("field codes are dropped", autostart.clean_exec("app --flag %U"), "app --flag")
+# %% is the spec's escape for one literal percent, so it must collapse to one and not be
+# eaten along with the real field codes.
+check("a literal percent survives as one",
+      autostart.clean_exec("sh -c 'echo 100%%'"), "sh -c 'echo 100%'")
+check("a command with no field codes is unchanged",
+      autostart.clean_exec("/usr/bin/app"), "/usr/bin/app")
+check("an empty command stays empty", autostart.clean_exec(""), "")
+
+# --- flags are written into [Desktop Entry], never appended to the file
+_BODY = ("[Desktop Entry]\nType=Application\nName=A\nExec=a\n"
+         "[Desktop Action New]\nName=New\nExec=a --new\n")
+_off = autostart._with_state(_BODY, False)
+check("turning off sets Hidden", "Hidden=true" in _off, True)
+check("turning off sets the GNOME key",
+      "X-GNOME-Autostart-enabled=false" in _off, True)
+# A key written into the wrong group is silently ignored by every desktop, so the
+# desktop-action group has to keep its own keys exactly as they were.
+check("the desktop-action group is left alone",
+      "[Desktop Action New]\nName=New\nExec=a --new" in _off, True)
+_on = autostart._with_state(_off, True)
+check("turning on clears Hidden", "Hidden=true" not in _on, True)
+check("turning on clears the GNOME key",
+      "X-GNOME-Autostart-enabled=false" not in _on, True)
+_dup = autostart._with_state(
+    "[Desktop Entry]\nName=A\nHidden=false\nHidden=false\n", False)
+check("a repeated flag collapses to one line", _dup.count("Hidden="), 1)
+check("a repeated flag takes the requested value", "Hidden=true" in _dup, True)
+_bare = autostart._with_state("Name=A\nExec=a\n", False)
+check("a group is created when there is none",
+      _bare.startswith("[Desktop Entry]"), True)
+check("...and the flags land inside it", "Hidden=true" in _bare, True)
+
+
+def _flow():
+    """collect/add/set_enabled/remove against a temporary system/user pair."""
+    with tempfile.TemporaryDirectory() as tmp:
+        system = Path(tmp) / "system"
+        user = Path(tmp) / "user"
+        system.mkdir()
+        user.mkdir()
+        autostart.SYSTEM_AUTOSTART = system
+        autostart.USER_AUTOSTART = user
+
+        (system / "Vendor.desktop").write_text(_desktop_text("Vendor", "sh"))
+        (system / "Hidden-vendor.desktop").write_text(_desktop_text("Hidden Vendor", "sh"))
+        # A packaged entry with no user counterpart at all: this is the one removal must
+        # refuse, because there is no user file to delete.
+        (system / "System-only.desktop").write_text(_desktop_text("System Only", "sh"))
+        (user / "Hidden-vendor.desktop").write_text(
+            _desktop_text("Hidden Vendor", "sh", "Hidden=true\n"))
+        # Two entries a session would never start, and neither should be listed.
+        (system / "NotAnApp.desktop").write_text(
+            "[Desktop Entry]\nType=Link\nName=Shortcut\nExec=sh\n")
+        (system / "NoCommand.desktop").write_text(
+            "[Desktop Entry]\nType=Application\nName=No Command\n")
+
+        rows = {r["id"]: r for r in autostart.collect()}
+        check("a packaged starter is listed", "Vendor.desktop" in rows, True)
+        check("a Link entry is not listed", "NotAnApp.desktop" in rows, False)
+        check("an entry with no Exec= is not listed", "NoCommand.desktop" in rows, False)
+        check("a packaged entry is on", rows["Vendor.desktop"]["enabled"], True)
+        check("a packaged entry is not removable",
+              rows["Vendor.desktop"]["removable"], False)
+        check("a user entry overrides the packaged one of the same name",
+              rows["Hidden-vendor.desktop"]["enabled"], False)
+        check("the override is reported as the user's",
+              rows["Hidden-vendor.desktop"]["source"], "user")
+        check("the override is removable",
+              rows["Hidden-vendor.desktop"]["removable"], True)
+
+        # Switching a packaged entry off writes an override and leaves the package's own
+        # file byte-for-byte as it was, so a reinstall cannot silently re-enable it.
+        packaged = system / "Vendor.desktop"
+        before = packaged.read_text()
+        ok, _, _ = autostart.set_enabled("Vendor.desktop", False)
+        check("a packaged entry can be switched off", ok, True)
+        check("the packaged file is untouched", packaged.read_text(), before)
+        check("an override file was written", (user / "Vendor.desktop").is_file(), True)
+        rows = {r["id"]: r for r in autostart.collect()}
+        check("the entry now reads as off", rows["Vendor.desktop"]["enabled"], False)
+        check("...and now comes from the user's directory",
+              rows["Vendor.desktop"]["source"], "user")
+
+        ok, _, _ = autostart.set_enabled("Vendor.desktop", True)
+        check("a packaged entry can be switched back on", ok, True)
+        rows = {r["id"]: r for r in autostart.collect()}
+        check("the entry reads as on again", rows["Vendor.desktop"]["enabled"], True)
+
+        # Adding an installed program.
+        ok, _, _ = autostart.add("My App", "sh --flag %U")
+        check("an installed program can be added", ok, True)
+        target = user / "slpm-my-app.desktop"
+        check("the entry is written under a reserved prefix", target.is_file(), True)
+        rows = {r["id"]: r for r in autostart.collect()}
+        check("the added entry is on", rows["slpm-my-app.desktop"]["enabled"], True)
+        check("the field code was stripped before storing",
+              "%U" not in rows["slpm-my-app.desktop"]["exec"], True)
+
+        # The same command twice must not produce two entries, which would start the
+        # program twice at login.
+        ok, _, _ = autostart.add("My App Again", "sh --flag")
+        check("adding a duplicate command is accepted", ok, True)
+        check("...without writing a second file",
+              len(list(user.glob("slpm-*.desktop"))), 1)
+
+        # Closing an entry takes the file away, so the way back is add() again: it must
+        # recreate the entry, and the command must not be treated as a duplicate of the
+        # entry that no longer exists.
+        ok, _, _ = autostart.set_enabled("slpm-my-app.desktop", False)
+        check("closing a user entry removes its file",
+              (user / "slpm-my-app.desktop").is_file(), False)
+        rows = {r["id"]: r for r in autostart.collect()}
+        check("...so it is gone from the list", "slpm-my-app.desktop" in rows, False)
+        ok, _, _ = autostart.add("My App", "sh --flag")
+        check("adding it again succeeds", ok, True)
+        rows = {r["id"]: r for r in autostart.collect()}
+        check("...and the entry is back on",
+              rows["slpm-my-app.desktop"]["enabled"], True)
+
+        # Rejections.
+        check("a nameless program is refused", autostart.add("", "sh")[0], False)
+        check("a program with no command is refused", autostart.add("Nope", "")[0], False)
+        check("a command that is not on this computer is refused",
+              autostart.add("Nope", "/no/such/command-xyz")[0], False)
+
+        # Removal is for files SLPM may delete. A packaged entry with no user override
+        # is only ever switched off; its file belongs to a package, not to the user.
+        check("a user entry can be removed",
+              autostart.remove("slpm-my-app.desktop")[0], True)
+        check("the file is gone", (user / "slpm-my-app.desktop").is_file(), False)
+        check("a packaged entry with no override cannot be deleted",
+              autostart.remove("System-only.desktop")[0], False)
+        check("...and its packaged file is still there",
+              (system / "System-only.desktop").is_file(), True)
+        # Vendor.desktop has a user override by now (written by the toggle above), so
+        # what is being removed is the user's own file - which is exactly what should
+        # be deleted, and it is why the override step reports it as removable.
+        check("an override can be deleted once the user owns it",
+              autostart.remove("Vendor.desktop")[0], True)
+        check("...leaving the packaged file in place",
+              (system / "Vendor.desktop").is_file(), True)
+        check("an unknown entry is refused",
+              autostart.set_enabled("no-such-file.desktop", False)[0], False)
+
+
+try:
+    _flow()
+finally:
+    autostart.USER_AUTOSTART, autostart.SYSTEM_AUTOSTART = _REAL_AUTOSTART_DIRS
+
+# The browser catalog carries these as patterns (FA_PATTERNS in prefs.js, because the
+# program name varies); on the server side they are ordinary rows with one placeholder.
+for _sentence in ("{name} will now start when you log in.",
+                  "{name} already starts when you log in.",
+                  "{name} will no longer start when you log in.",
+                  "{name} was removed from your startup apps."):
+    check(f"startup message translated: {_sentence[:36]}…",
+          i18n.tr("fa", _sentence, name="vlc") != _sentence, True)
 
 
 # ------------------------------------------------------- helper allowlist

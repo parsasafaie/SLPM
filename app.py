@@ -13,8 +13,8 @@ from flask import Flask, jsonify, make_response, render_template, request, send_
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from slpm import apps as apps_mod
-from slpm import (appimage, apt, desktop, flatpak_snap, helper, installer, i18n, proc,
-                  state)
+from slpm import (appimage, apt, autostart, desktop, flatpak_snap, helper, installer,
+                  i18n, proc, state)
 
 app = Flask(__name__)
 app.config["JSON_SORT_KEYS"] = False
@@ -115,6 +115,11 @@ def page_install():
 @app.route("/apps")
 def page_apps():
     return render_template("apps.html", page="apps", env=_env())
+
+
+@app.route("/startup")
+def page_startup():
+    return render_template("startup.html", page="startup", env=_env())
 
 
 def _env():
@@ -267,6 +272,76 @@ def api_uninstall():
             return _err(exc)
         finally:
             _job.update(active=False, label="")
+
+
+# -------------------------------------------------------------------- startup
+
+@app.get("/api/startup")
+def api_startup():
+    try:
+        return jsonify({"ok": True, "apps": autostart.collect()})
+    except Exception as exc:
+        return _err(exc)
+
+
+@app.get("/api/startup/candidates")
+def api_startup_candidates():
+    """Installed applications a startup entry could point at.
+
+    The add dialog lists these instead of asking for a command line, so an added entry
+    runs the same program the menu runs. Only entries with a launch command are offered.
+    """
+    try:
+        rows = []
+        for rec in desktop.collect("simple"):
+            command = autostart.clean_exec(rec["exec"])
+            if not command:
+                continue
+            rows.append({
+                "name": rec["name"],
+                "exec": command,
+                "icon": rec["icon"],
+                "icon_url": (f"/api/icon?name={rec['icon']}&app={rec['id']}"
+                             if rec["icon"] else ""),
+                "comment": rec["comment"] or rec["generic"],
+            })
+        return jsonify({"ok": True, "apps": rows})
+    except Exception as exc:
+        return _err(exc)
+
+
+@app.post("/api/startup/add")
+def api_startup_add():
+    data = request.json or {}
+    try:
+        ok, msg, detail = autostart.add(
+            data.get("name", ""), data.get("exec", ""),
+            data.get("icon", ""), data.get("comment", ""),
+        )
+        return jsonify({"ok": ok, "message": msg, "detail": detail})
+    except Exception as exc:
+        return _err(exc)
+
+
+@app.post("/api/startup/toggle")
+def api_startup_toggle():
+    data = request.json or {}
+    try:
+        ok, msg, detail = autostart.set_enabled(data.get("id", ""),
+                                                bool(data.get("enabled")))
+        return jsonify({"ok": ok, "message": msg, "detail": detail})
+    except Exception as exc:
+        return _err(exc)
+
+
+@app.post("/api/startup/remove")
+def api_startup_remove():
+    data = request.json or {}
+    try:
+        ok, msg, detail = autostart.remove(data.get("id", ""))
+        return jsonify({"ok": ok, "message": msg, "detail": detail})
+    except Exception as exc:
+        return _err(exc)
 
 
 # ---------------------------------------------------- installed (advanced)
