@@ -13,8 +13,8 @@ from flask import Flask, jsonify, make_response, render_template, request, send_
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from slpm import apps as apps_mod
-from slpm import (appimage, apt, autostart, desktop, flatpak_snap, helper, installer,
-                  i18n, proc, state)
+from slpm import (appimage, apt, autostart, desktop, flatpak_snap, download, helper,
+                  installer, i18n, proc, state)
 
 app = Flask(__name__)
 app.config["JSON_SORT_KEYS"] = False
@@ -203,6 +203,37 @@ def api_helper_start():
         return jsonify({"ok": ok, "message": msg})
     except Exception as exc:
         return _err(exc)
+
+
+# ------------------------------------------------------ downloads
+
+@app.get("/api/downloads")
+def api_downloads():
+    """Every download job and its current progress, for the status bar."""
+    return jsonify({"ok": True, "downloads": download.list_status()})
+
+
+@app.post("/api/download/start")
+def api_download_start():
+    """Start downloading a URL into the Downloads folder."""
+    result = download.start((request.json or {}).get("url", ""))
+    if not result.get("ok"):
+        return jsonify(result), 400
+    return jsonify(result)
+
+
+@app.post("/api/download/control")
+def api_download_control():
+    """Pause, continue or stop a running download."""
+    data = request.json or {}
+    job_id = data.get("id", "")
+    action = data.get("action", "")
+    result = download.control(job_id, action)
+    if result is None:
+        return jsonify({"ok": False, "message": proc.t("That download is no longer running.")}), 404
+    if not result.get("ok"):
+        return jsonify(result), 400
+    return jsonify(result)
 
 
 # ------------------------------------------------------ installed (simple)

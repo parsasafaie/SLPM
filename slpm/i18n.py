@@ -264,8 +264,43 @@ _FA = {
         "برنامه‌های Flatpak، وقتی Flatpak نصب باشد.",
     "Archives. Extracted to a managed folder, then you choose what to add to the "
     "menu.":
-        "آرشیوها. در پوشه‌ای مدیریت‌شده استخراج می‌شوند، بعد خودتان انتخاب می‌کنید چه "
-        "چیزی به منو اضافه شود.",
+        "آرشیوها. در پوشهٔ مدیریت‌شده استخراج می‌شوند، بعد خودتان انتخاب می‌کنید چه چیز به منو اضافه شود.",
+    "Or download a link": "یا یک لینک دانلود کنید",
+    "Paste a download link and SLPM will save the file to your Downloads folder, then point it at the installer above.":
+        "یک لینک دانلود بچسبانید، SLPM فایل را در پوشهٔ Downloads ذخیره می‌کند و بعد آن را به نصب‌کنندهٔ بالا وصل می‌کند.",
+    "Download": "دانلود",
+    "Downloads": "دانلودها",
+    "Paste a download link, like https://example.com/app.AppImage":
+        "یک لینک دانلود بچسبانید، مثل ‎https://example.com/app.AppImage‎",
+    "Saved to Downloads, then pointed at the installer above.":
+        " در Downloads ذخیره شد و به نصب‌کنندهٔ بالا وصل شد.",
+    "This does not look like a web link.": "این شبیه لینک اینترنتی نیست.",
+    "Install method": "روش نصب",
+    "Install from file": "نصب از فایل",
+    "Download and install": "دانلود و نصب",
+    "Paste a download link and SLPM will download it and install it automatically.":
+        "یک لینک دانلود بچسبانید، SLPM فایل را دانلود و به‌ خودکار نصب می‌کند.",
+    "Download ready, installing…": "آمادهٔ نصب شد، در حال نصب…",
+    "in progress": "در حال انجام",
+    "Enter a link starting with http:// or https://":
+        "یک لینک با شروع http:// یا https وارد کنید.",
+    "Download failed.": "دانلود شکست خورد.",
+    "Unknown action.": "عمل ناشناخت.",
+    "That download is no longer running.": "این دانلود دیگر در حال نیست.",
+
+    "Waiting…": "در انتظار…",
+    "Downloading…": "در حال دانلود…",
+    "Paused": "در مکث",
+    "Done": "انجام شد",
+    "Failed": "شکست خورد",
+    "Stopped": "توقف شد",
+    "Ready to install": "آمادهٔ نصب",
+    "Continue": "ادامه",
+    "Pause": "توقف موقت",
+    "Stop": "توقف",
+    "Download failed": "دانلود شکست خورد",
+    "Not installable": "غیرقابل نصب",
+    "This file could not be installed.": "این فایل نصب نشد.",
 
     "Installed apps": "برنامه‌های نصب‌شده",
     "Everyday applications on this computer.":

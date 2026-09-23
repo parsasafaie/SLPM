@@ -50,8 +50,8 @@
   // Alt text is written here rather than in the markup so it follows the language.
   const ALT = {
     install: {
-      en: 'The Install page: a box to drop a downloaded file into, and a list of the file types SLPM can install.',
-      fa: 'صفحهٔ نصب: کادری برای رها کردن فایل دانلودشده و فهرستی از قالب‌هایی که SLPM می‌تواند نصب کند.',
+      en: 'The Install page: a switcher to choose between installing a local file or downloading and installing a link, the file drop box, and a list of the file types SLPM can install.',
+      fa: 'صفحهٔ نصب: سوییچر برای انتخاب بین نصب فایل محلی یا دانلود و نصب یک لینک، کادر رها کردن فایل و فهرستی از قالب‌هایی که SLPM می‌تواند نصب کند.',
     },
     apps: {
       en: 'The Installed Apps page in Simple mode, showing only the applications the user installed themselves, with the Simple/Advanced switch in the top bar.',

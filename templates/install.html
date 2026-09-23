@@ -7,17 +7,51 @@
   <p class="muted">{{ t('Downloaded a file? Point SLPM at it. It works out what the file is and does the rest — you do not need to know anything about packages.') }}</p>
 </section>
 
-<div class="card">
-  <label class="label" for="path">{{ t('File to install') }}</label>
-  <div class="drop" id="drop">
-    <input id="path" type="text" dir="ltr" placeholder="{{ t('Drop a file here, or paste a path like /home/you/Downloads/app.AppImage') }}" autocomplete="off">
-    <button class="btn btn-ghost" id="browse">{{ t('Browse…') }}</button>
+{# A segmented switcher lets the user pick HOW they get a file: from a file already
+   on this computer, or by downloading one. It swaps the two view panels below and
+   keeps nothing else moving, so it is pure client-side. The download bar stays at
+   the bottom because a download runs in the background regardless of which panel
+   is on screen. #}
+<div class="view-switch" role="group" aria-label="{{ t('Install method') }}">
+  <button type="button" class="switch active" data-view="file">{{ t('Install from file') }}</button>
+  <button type="button" class="switch" data-view="download">{{ t('Download and install') }}</button>
+</div>
+
+<!-- Install from a file already on this computer. -->
+<div class="view-panel" id="view-file">
+  <div class="card">
+    <label class="label" for="path">{{ t('File to install') }}</label>
+    <div class="drop" id="drop">
+      <input id="path" type="text" dir="ltr" placeholder="{{ t('Drop a file here, or paste a path like /home/you/Downloads/app.AppImage') }}" autocomplete="off">
+      <button class="btn btn-ghost" id="browse">{{ t('Browse…') }}</button>
+    </div>
+    <div class="row gap">
+      <button class="btn btn-primary" id="install" disabled>{{ t('Install') }}</button>
+      <button class="btn btn-ghost" id="clear">{{ t('Clear') }}</button>
+    </div>
+    <div id="detect" class="detect"></div>
   </div>
-  <div class="row gap">
-    <button class="btn btn-primary" id="install" disabled>{{ t('Install') }}</button>
-    <button class="btn btn-ghost" id="clear">{{ t('Clear') }}</button>
+</div>
+
+<!-- Download a link, then install it automatically when the download finishes. -->
+<div class="view-panel hidden" id="view-download">
+  <div class="card">
+    <h3>{{ t('Download and install') }}</h3>
+    <p class="muted small">{{ t('Paste a download link and SLPM will download it and install it automatically.') }}</p>
+    <div class="drop">
+      <input id="download-url" type="text" dir="ltr" placeholder="{{ t('Paste a download link, like https://example.com/app.AppImage') }}" autocomplete="off">
+      <button class="btn btn-primary" id="download-btn" disabled>{{ t('Download') }}</button>
+    </div>
+    <div id="download-hint" class="detect"></div>
   </div>
-  <div id="detect" class="detect"></div>
+</div>
+
+<div id="download-bar" class="download-bar hidden">
+  <div class="download-bar-head">
+    <strong>{{ t('Downloads') }}</strong>
+    <span class="muted small" id="download-bar-note"></span>
+  </div>
+  <div id="download-rows" class="download-rows"></div>
 </div>
 
 <div class="card">

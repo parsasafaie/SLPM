@@ -15,6 +15,7 @@ Flask application (`app.py`)
   └─ domain modules (`slpm/`)
        ├─ package managers: apt/dpkg, Flatpak, Snap
        ├─ local installers: AppImage, archives, scripts
+       ├─ downloads: background fetch with pause, continue and stop
        ├─ desktop-entry integration
        ├─ ownership classification (user-installed vs pre-installed)
        └─ subprocess and privileged-command boundary
@@ -39,6 +40,7 @@ The application does not use a database or a remote service. Package-manager com
 - `slpm/apt.py`: reads apt/dpkg data and handles Debian package installation and removal.
 - `slpm/flatpak_snap.py`: discovers installed Flatpak/Snap applications and performs their package operations.
 - `slpm/appimage.py`: validates AppImages, places them under `~/Applications` and prepares menu launchers.
+- `slpm/download.py`: fetches a URL into the Downloads folder in a background thread, resuming with an HTTP `Range` request, and reports progress for the status bar.
 - `slpm/desktop.py`: parses `.desktop` files, filters entries by visibility and creates/updates launchers.
 - `slpm/apps.py`: combines desktop entries and package-manager data, then keeps or drops each row according to its ownership verdict and the requested mode.
 - `slpm/ownership.py`: decides, for each app and startup entry, whether the user installed it or it came with the system. See "Simple and Advanced modes".
@@ -86,6 +88,12 @@ The tab performs no privileged work and never launches a program.
 
 Supported archives are extracted below `~/.local/share/slpm/apps/`. SLPM searches the extracted tree for launchable programs or desktop entries and asks the user to choose when there is more than one candidate. `.run` and `.sh` files are not executed as arbitrary installation commands; they are treated as entries that can be registered.
 
+### Downloads
+
+The Install page has two views side by side: install a file you already have, or download one from a link. Pointing it at a link starts a background download to the Downloads folder, and the download bar lists each job with a progress bar and pause, continue and stop controls.
+
+Each job runs in its own thread and resumes from the last byte it has with an HTTP `Range` request. A server that cannot resume either rejects the range with a 416 or sends the whole file instead of the remainder (200); SLPM notices both, discards the partial file and starts again so the same bytes are never written twice. When the download finishes the file is installed automatically — its type is recognised and installed the right way — so the user does not have to find and open it.
+
 ## Simple and Advanced modes
 
 The mode is a browser preference, like language and theme: the `slpm_mode` cookie, rendered onto `<html data-mode>`, remembered across visits. `simple` is the default — Advanced is entered, never assumed — and the first entry into it on a page asks for confirmation, because that view can remove system components. The switch sits in the top bar next to the tabs, applies to the whole application, and is shared by the Installed Apps and Startup Apps tabs (the Install tab ignores it).
@@ -111,7 +119,7 @@ The deliberately rejected signals: which directory the `.desktop` file sits in (
 
 ## HTTP and frontend layers
 
-Flask serves the page templates and static assets. JSON endpoints cover browser preferences, installed-application lists, file-type detection, installation, launch, removal and operation status. The frontend submits paths and explicit choices back to the server; the server repeats validation rather than trusting client-side state.
+Flask serves the page templates and static assets. JSON endpoints cover browser preferences, installed-application lists, file-type detection, installation, downloading, launch, removal and operation status. The frontend submits paths and explicit choices back to the server; the server repeats validation rather than trusting client-side state.
 
 The separate `docs/` site is a static GitHub Pages website. `docs/site.js` detects the Pages repository, falls back to `https://github.com/parsasafaie/SLPM`, and creates links to repository files on branch `main`.
 
@@ -123,7 +131,7 @@ The helper accepts only explicitly allowlisted package-manager calls, validates 
 
 ## State, files and concurrency
 
-Language, theme and view mode are browser cookies. The current request language is held in a `ContextVar`, so concurrent requests do not overwrite one another. Installation/removal jobs are protected by a process-local lock and expose active-job status to the UI.
+Language, theme and view mode are browser cookies. The current request language is held in a `ContextVar`, so concurrent requests do not overwrite one another. Installation/removal jobs are protected by a process-local lock and expose active-job status to the UI. Download jobs run one thread per job, each guarded by its own lock, and report progress through the download status so the progress bar keeps updating while a file is fetched.
 
 - User launchers and extracted archives: `~/.local/share/slpm/`
 - Startup entries added or overridden by hand: `~/.config/autostart/`

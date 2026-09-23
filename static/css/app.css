@@ -151,6 +151,24 @@ code { font-family: var(--mono); background: var(--inset); padding: .1rem .35rem
 /* Advanced can remove what the machine needs to boot, so its active state carries the
    warning colour instead of looking exactly like a selected tab. */
 .mode-btn.active[data-mode="advanced"] { color: var(--warn); }
+
+/* The Install page's own segmented control: two buttons that swap between "install a
+   file you already have" and "download a link and install it". Same shape as the
+   Simple/Advanced mode switch, just placed inside the page instead of the nav row. */
+.view-switch {
+  display: inline-flex; gap: .25rem; align-items: center;
+  padding: .3rem; border: 1px solid var(--line); border-radius: 12px;
+  background: var(--surface); margin: 0 0 1rem;
+}
+.view-switch .switch {
+  font: inherit; font-weight: 600; font-size: .9rem; padding: .5rem 1.1rem;
+  border: 0; background: transparent; color: var(--muted); border-radius: 9px;
+  cursor: pointer; transition: background .15s, color .15s;
+}
+.view-switch .switch:hover { color: var(--text); background: var(--hover); }
+.view-switch .switch.active { background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
+.view-panel { display: block; }
+.view-panel.hidden { display: none; }
 .pill {
   font-size: .78rem; font-weight: 600; padding: .35rem .7rem; border-radius: 999px;
   background: var(--info-bg); color: var(--info-text); white-space: nowrap;
@@ -250,7 +268,59 @@ input:focus, .select:focus {
   border: 2.5px solid var(--spinner-track); border-top-color: var(--accent);
   animation: spin .8s linear infinite;
 }
+.spinner.small { width: 15px; height: 15px; border-width: 2px; }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* ---------------------------------------------------------------- downloads
+   The bar is fixed to the bottom so a download keeps showing while the user
+   scrolls or opens the installer. Each row mirrors the app's card language: a
+   spinner, the file name, a thin progress bar, and compact action buttons. */
+.download-bar {
+  position: fixed; left: 50%; transform: translateX(-50%);
+  bottom: 1rem; z-index: 50; width: min(760px, calc(100vw - 2rem));
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: 14px; box-shadow: 0 12px 32px -12px rgba(16, 24, 40, .4);
+  padding: .7rem .9rem;
+}
+.download-bar-head {
+  display: flex; align-items: baseline; justify-content: space-between;
+  margin-bottom: .55rem; font-size: .88rem;
+}
+.download-rows { display: grid; gap: .55rem; }
+.download-row { min-width: 0; }
+.download-row-top {
+  display: flex; align-items: center; gap: .55rem;
+}
+.download-name {
+  font: inherit; font-weight: 600; font-size: .85rem; flex: 1 1 auto;
+  min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.download-name:focus-visible { outline: none; border-radius: 4px; box-shadow: 0 0 0 3px var(--focus-ring); }
+.download-meta {
+  font-size: .76rem; color: var(--muted); flex: 0 0 auto; white-space: nowrap;
+  font-family: var(--mono);
+}
+.download-actions { display: flex; gap: .3rem; flex: 0 0 auto; }
+/* Compact action buttons sized for the bar, overriding the 36px icon-btn box. */
+.download-bar .icon-btn {
+  height: 30px; min-width: 30px; padding: 0 .4rem; border-radius: 8px;
+}
+.download-bar .icon-btn svg { width: 16px; height: 16px; }
+.download-control:hover:not(:disabled) { background: var(--hover); }
+.download-resume { color: var(--ok); border-color: var(--ok); }
+.download-bar .bar { height: 5px; }
+.download-bar-fill {
+  height: 100%; width: 0; border-radius: 999px;
+  background: linear-gradient(90deg, var(--accent), #7c3aed);
+  transition: width .3s ease;
+}
+/* A finished download reads as done rather than busy, with a check mark. */
+.download-done { display: flex; align-items: center; gap: .55rem; }
+.download-check {
+  flex: 0 0 auto; width: 20px; height: 20px; border-radius: 50%;
+  background: var(--ok-bg); color: var(--ok); font-size: .78rem;
+  display: grid; place-items: center; font-weight: 700;
+}
 
 /* ------------------------------------------------------------------- apps */
 .switcher { display: flex; background: var(--inset); padding: .25rem; border-radius: 11px; }

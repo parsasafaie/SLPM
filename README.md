@@ -14,7 +14,8 @@ A simple local web app for installing, viewing, launching, and removing Linux so
   - The Install tab is identical in both modes.
 - Telling your apps from pre-installed ones is evidence-based: SLPM reads the package managers' own records — the date each package first appears in the dpkg log, compared against the operating system's install date, the snap seed file, and Flatpak install times. Directory location and file dates are deliberately not used, because they can lie.
 - A Startup Apps tab that lists what a session starts by itself, with one-click adding and removal
-- Support for `.deb`, AppImage, Flatpak references, archives, and installer files
+- Support for `.deb`, AppImage, Flatpak references, archives, and installer files — opening a file you have or downloading one from a link
+- Downloads run in the background with pause, continue and stop controls, a live progress bar, and an automatic install once the file is finished
 - Automatic detection of available `apt`, Flatpak, and Snap tools
 - English and Persian interface with light and dark themes
 - Confirmation and safety checks for package operations
@@ -54,7 +55,8 @@ python selftest.py
 app.py              Flask application entry point
 slpm/               Package and desktop-integration logic
                     (ownership.py decides which software the user installed
-                    and which came with the system)
+                    and which came with the system, and download.py fetches a
+                    link in the background with pause, continue and stop)
 templates/          HTML templates
 static/             CSS and JavaScript assets
 docs/               GitHub Pages website
