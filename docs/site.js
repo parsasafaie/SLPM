@@ -54,8 +54,12 @@
       fa: 'صفحهٔ نصب: کادری برای رها کردن فایل دانلودشده و فهرستی از قالب‌هایی که SLPM می‌تواند نصب کند.',
     },
     apps: {
-      en: 'The Installed Apps page in Simple mode, showing everyday applications with their icons, versions and Launch, Details and Remove buttons.',
-      fa: 'صفحهٔ برنامه‌های نصب‌شده در حالت ساده، با آیکون و نسخهٔ برنامه‌های روزمره و دکمه‌های اجرا، جزئیات و حذف.',
+      en: 'The Installed Apps page in Simple mode, showing only the applications the user installed themselves, with the Simple/Advanced switch in the top bar.',
+      fa: 'صفحهٔ برنامه‌های نصب‌شده در حالت ساده که فقط برنامه‌های نصب‌شده توسط کاربر را نشان می‌دهد و کلید ساده/پیشرفته در نوار بالایی است.',
+    },
+    startup: {
+      en: 'The Startup Apps page in Advanced mode, listing the programs that start with the session — the user’s own entries and the ones packages installed — with a toggle for each.',
+      fa: 'صفحهٔ برنامه‌های هنگام ورود در حالت پیشرفته که برنامه‌های راه‌اندازی‌شده با نشست را فهرست می‌کند — هم موارد کاربر و هم موارد بسته‌های سیستم — و برای هرکدام کلید خاموش/روشن دارد.',
     },
     advanced: {
       en: 'The Installed Apps page in Advanced mode, listing every installed package including libraries and system components.',

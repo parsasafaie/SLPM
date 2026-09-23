@@ -10,12 +10,13 @@ Browser
   └─ JSON requests
        ↓
 Flask application (`app.py`)
-  ├─ language/theme and request context
-  ├─ route validation and job locking
+  ├─ language/theme/mode and request context
+  ├─ route validation, job locking, mode enforcement
   └─ domain modules (`slpm/`)
        ├─ package managers: apt/dpkg, Flatpak, Snap
        ├─ local installers: AppImage, archives, scripts
        ├─ desktop-entry integration
+       ├─ ownership classification (user-installed vs pre-installed)
        └─ subprocess and privileged-command boundary
 ```
 
@@ -24,7 +25,7 @@ The application does not use a database or a remote service. Package-manager com
 ## Runtime flow
 
 1. `app.py` creates the Flask application and registers request handlers.
-2. A request selects its language from `?lang=` or a browser cookie; theme is also read from a cookie.
+2. A request selects its language from `?lang=` or a browser cookie; theme and view mode (`simple`/`advanced`, default `simple`) are also read from cookies.
 3. `before_request` stores the normalized language in a `ContextVar`, making translations safe when requests overlap.
 4. HTML routes render `templates/`; browser code in `static/js/` calls JSON endpoints for lists, detection and operations.
 5. A route validates user input and delegates to the relevant module under `slpm/`.
@@ -38,9 +39,10 @@ The application does not use a database or a remote service. Package-manager com
 - `slpm/apt.py`: reads apt/dpkg data and handles Debian package installation and removal.
 - `slpm/flatpak_snap.py`: discovers installed Flatpak/Snap applications and performs their package operations.
 - `slpm/appimage.py`: validates AppImages, places them under `~/Applications` and prepares menu launchers.
-- `slpm/desktop.py`: parses `.desktop` files, filters entries for Simple mode and creates/updates launchers.
-- `slpm/apps.py`: combines desktop entries and package-manager data into Simple and Advanced views.
-- `slpm/autostart.py`: reads the session's autostart entries, adds one for an installed application, and switches an entry off.
+- `slpm/desktop.py`: parses `.desktop` files, filters entries by visibility and creates/updates launchers.
+- `slpm/apps.py`: combines desktop entries and package-manager data, then keeps or drops each row according to its ownership verdict and the requested mode.
+- `slpm/ownership.py`: decides, for each app and startup entry, whether the user installed it or it came with the system. See "Simple and Advanced modes".
+- `slpm/autostart.py`: reads the session's autostart entries, marks each one user-owned or packaged, adds an entry for an installed application, and switches one off.
 - `slpm/proc.py`: the general subprocess boundary; uses argument arrays, fixed timeouts, environment normalization and structured `(return code, stdout, stderr)` results.
 - `slpm/helper.py`: short-lived Unix-socket bridge for privileged operations started through polkit or sudo.
 - `slpm/i18n.py`: English/Persian translations, locale normalization, interpolation and text direction.
@@ -84,6 +86,29 @@ The tab performs no privileged work and never launches a program.
 
 Supported archives are extracted below `~/.local/share/slpm/apps/`. SLPM searches the extracted tree for launchable programs or desktop entries and asks the user to choose when there is more than one candidate. `.run` and `.sh` files are not executed as arbitrary installation commands; they are treated as entries that can be registered.
 
+## Simple and Advanced modes
+
+The mode is a browser preference, like language and theme: the `slpm_mode` cookie, rendered onto `<html data-mode>`, remembered across visits. `simple` is the default — Advanced is entered, never assumed — and the first entry into it on a page asks for confirmation, because that view can remove system components. The switch sits in the top bar next to the tabs, applies to the whole application, and is shared by the Installed Apps and Startup Apps tabs (the Install tab ignores it).
+
+What each mode shows is decided server-side, so the distinction cannot be bypassed by calling the API directly:
+
+- `/api/apps` and `/api/startup` return only user-owned rows in Simple mode.
+- The package-database endpoints (`/api/packages*`) answer 403 in Simple mode.
+- `/api/uninstall` re-derives the target's ownership from the Simple list and refuses pre-installed apps; startup toggle/remove refuse entries that are not user-owned.
+
+### How ownership is classified
+
+The question — "did the user put this on the machine, or did it come with the OS?" — is answered from the records the package managers keep themselves, in `slpm/ownership.py`:
+
+- **dpkg/apt**: the first date a package appears in `/var/log/dpkg.log` (including the rotated `.1`–`.3` files) is when it arrived. The earliest date in the log is the OS install *only* when the log demonstrably reaches back to it: the oldest kept file (`.3`) must be absent and the log's first line must contain the distribution installer's marker (`startup archives install`). Without that anchor — for example after the log has rotated past the OS install — every answer is "unknown" rather than a guess, and unknown entries are treated as not user-installed. A few days of slack after the anchor absorb a long installer run.
+- **snap**: `/var/lib/snapd/seed/seed.yaml` lists the snaps baked into the system image; absence from the seed means installed afterwards.
+- **Flatpak**: the creation time of the per-app deployment directory, compared to the OS install time.
+- **autostart**: a user file with no packaged counterpart of the same name is the user's; the same name as a packaged entry is an override and follows the package; the `slpm-` prefix marks entries SLPM itself added.
+
+For `.desktop` entries the owning package is found from the `Exec=` command via `dpkg-query -S` (resolving PATH lookups and symlinks); when the command cannot be traced (empty `Exec=`, `TryExec` binary absent), the package that ships the `.desktop` file itself is the same evidence. Snap and Flatpak entries are decided by their own managers before any dpkg lookup.
+
+The deliberately rejected signals: which directory the `.desktop` file sits in (`apt install ./x.deb` lands in the same place as a base package), the mtime of `/var/lib/dpkg/info/*.list` (rewritten by every upgrade), and menu visibility.
+
 ## HTTP and frontend layers
 
 Flask serves the page templates and static assets. JSON endpoints cover browser preferences, installed-application lists, file-type detection, installation, launch, removal and operation status. The frontend submits paths and explicit choices back to the server; the server repeats validation rather than trusting client-side state.
@@ -98,7 +123,7 @@ The helper accepts only explicitly allowlisted package-manager calls, validates 
 
 ## State, files and concurrency
 
-Language and theme are browser cookies. The current request language is held in a `ContextVar`, so concurrent requests do not overwrite one another. Installation/removal jobs are protected by a process-local lock and expose active-job status to the UI.
+Language, theme and view mode are browser cookies. The current request language is held in a `ContextVar`, so concurrent requests do not overwrite one another. Installation/removal jobs are protected by a process-local lock and expose active-job status to the UI.
 
 - User launchers and extracted archives: `~/.local/share/slpm/`
 - Startup entries added or overridden by hand: `~/.config/autostart/`
@@ -110,7 +135,7 @@ Because state is local and the lock is process-local, this architecture is inten
 
 ## Verification and maintenance
 
-`selftest.py` exercises desktop-entry parsing, Simple/Advanced filtering, package safety classification, archive extraction, path-choice validation, startup-entry flags and overrides, privileged-command allowlisting, command probing, human-readable sizes and translations. It avoids actually installing or removing packages. Run it after changes with:
+`selftest.py` exercises desktop-entry parsing, Simple/Advanced filtering, ownership classification (synthetic dpkg logs, the installer marker, rotation past the anchor, and every real entry on the running machine), package safety classification, archive extraction, path-choice validation, startup-entry flags and overrides, privileged-command allowlisting, command probing, human-readable sizes and translations. It avoids actually installing or removing packages. Run it after changes with:
 
 ```bash
 source .venv/bin/activate
