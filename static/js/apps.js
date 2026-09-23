@@ -1,8 +1,13 @@
-/* Installed Apps: Simple mode (app list) and Advanced mode (all packages). */
+/* Installed Apps: Simple mode (your own apps) and Advanced mode (every package).
+ *
+ * The Simple/Advanced switch itself lives in the tab row (base.html) and is owned by
+ * prefs.js, because the choice applies to the Startup tab too. What is here is the
+ * reaction to it: re-read the list in the new mode, and keep the page's own furniture
+ * (subtitle, filter, cleanup button) in step.
+ */
 
 const state = {
-  mode: 'simple',
-  allowed: false,     // Advanced unlocked for this session
+  mode: SLPM.state.mode,
   items: [],
   query: '',
   source: 'all',
@@ -20,50 +25,32 @@ function setLoading(on, text) {
 
 /* ------------------------------------------------------------ mode switch */
 
-$$('.switch').forEach(btn => btn.onclick = () => switchMode(btn.dataset.mode));
-
-function switchMode(mode) {
-  if (mode === state.mode) return;
-  if (mode === 'advanced' && !state.allowed) return advancedGate();
+/* prefs.js tells us when the switch was used; the page only has to repaint itself. */
+SLPM.onModeChange(mode => {
   state.mode = mode;
-  $$('.switch').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
-  $('#cleanup').classList.toggle('hidden', mode !== 'advanced');
-  $('#subtitle').textContent = mode === 'advanced'
-    ? T('Every installed package, including system components.')
-    : T('Everyday applications on this computer.');
-  $('#filter').classList.toggle('hidden', false);
+  applyModeChrome();
   load();
+});
+
+function applyModeChrome() {
+  const advanced = state.mode === 'advanced';
+  $('#cleanup').classList.toggle('hidden', !advanced);
+  $('#subtitle').textContent = advanced
+    ? T('Every installed package, including system components.')
+    : T('Only the apps you installed yourself. Switch to Advanced to see everything '
+        + 'the system came with.');
+  // The source filter is about package managers, which only the advanced list reports.
+  $('#filter').classList.toggle('hidden', !advanced);
 }
 
-/* The safety gate: nothing renders until the user accepts the warning. */
-function advancedGate() {
-  modal({
-    title: T('Switch to Advanced Mode?'),
-    html: `<p>${esc(T('Advanced Mode displays critical system components. Removing '
-      + 'essential packages may break your operating system.'))}</p>
-           <div class="warn-box">${esc(T('Proceed with caution. In this view you can see '
-      + 'and remove libraries, drivers and core services — not just applications. '
-      + 'Windows programs never expose this, because on Linux a wrong removal can '
-      + 'leave the computer unable to start.'))}</div>
-           <p class="small muted">${esc(T('App and package name searches still work '
-      + 'normally.'))}</p>`,
-    buttons: [
-      { label: T('Stay in Simple Mode'), kind: 'ghost', onClick: closeModal },
-      { label: T('I understand, continue'), kind: 'danger', onClick: () => {
-          state.allowed = true;
-          closeModal();
-          state.mode = '';
-          switchMode('advanced');
-        } }
-    ]
-  });
-}
+/* app.js already wired the buttons to SLPM.setMode, which asks before entering
+   Advanced Mode and then calls the listeners above. */
 
 /* --------------------------------------------------------------- loading */
 
 async function load() {
   setLoading(true, state.mode === 'simple'
-    ? T('Reading installed programs…')
+    ? T('Reading your installed apps…')
     : T('Reading the package database…'));
   if (state.mode === 'simple') {
     const r = await api('/api/apps');
@@ -92,14 +79,20 @@ function render() {
       (i.summary || '').toLowerCase().includes(q) ||
       (i.package || '').toLowerCase().includes(q));
   }
-  if (state.source !== 'all') items = items.filter(i => i.manager === state.source);
+  // The source filter belongs to the advanced list, where every manager shows up.
+  if (state.mode === 'advanced' && state.source !== 'all') {
+    items = items.filter(i => i.manager === state.source);
+  }
   listEl.classList.toggle('rows', state.mode === 'advanced');
   listEl.innerHTML = '';
   if (!items.length) {
     empty.classList.remove('hidden');
     $('#empty-note').textContent = state.query
       ? T('Nothing matched “{q}”.', { q: state.query })
-      : T('No applications matched.');
+      : (state.mode === 'simple'
+          ? T('You have not installed any apps yourself yet. Switch to Advanced to see '
+              + 'everything the system came with.')
+          : T('No applications matched.'));
     return;
   }
   empty.classList.add('hidden');
@@ -122,7 +115,7 @@ function row(item) {
     : `<span class="letter">${esc((item.name || '?').trim().charAt(0).toUpperCase())}</span>`;
   // "system" now means what it says: removal is impossible (dpkg Essential). Packages
   // that merely belong to the OS get a softer "os" badge - they are still removable, so
-  // they must not look protected.
+  // they must not look protected. Both are advanced-view concepts.
   const badges = [
     state.mode === 'advanced' && item.essential
       ? `<span class="badge essential">${esc(T('system'))}</span>` : '',
@@ -362,7 +355,6 @@ $('#filter').addEventListener('change', e => {
   else render();
 });
 $('#refresh').onclick = load;
-
 $('#cleanup').onclick = () => {
   modal({
     title: T('Clean unused dependencies?'),
@@ -385,4 +377,7 @@ $('#cleanup').onclick = () => {
   });
 };
 
+/* The page opens in whatever mode the server rendered (see base.html), so the chrome
+   has to follow that before the first load rather than assuming simple. */
+applyModeChrome();
 load();

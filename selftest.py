@@ -21,7 +21,7 @@ ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT))
 
 from slpm import (apps, apt, appimage, autostart, desktop, helper, i18n, installer,  # noqa: E402
-                  proc)
+                  ownership as ow, proc)
 
 # Runs inside node: load the browser catalog twice, once per language, and report every
 # T() call whose {placeholder} survives. Prints one line per failure, nothing on success.
@@ -142,6 +142,146 @@ check("no is_unremovable classifier left",
 check("apt is not dpkg-Essential", apt._is_essential("apt"), False)
 check("base-files is dpkg-Essential", apt._is_essential("base-files"), True)
 check("nonexistent package is not Essential", apt._is_essential("slpm-no-such-pkg"), False)
+
+
+# ------------------------------------------------- ownership (Simple vs Advanced)
+
+section("Ownership: user-installed vs pre-installed")
+
+# The classifier reads the package manager's own logs, which cannot be redirected from a
+# test, so the parsing and the boundary logic are exercised on synthetic log text. The
+# real files are then checked for the one property that matters - that the OS install
+# date is found - because without it nothing can be classified, and Simple Mode would
+# have to either show everything or nothing.
+_LOG = (
+    "2026-04-23 01:15:04 startup archives install\n"
+    "2026-04-23 01:15:04 install base-files:amd64 <none> 14ubuntu6\n"
+    "2026-04-23 01:15:05 configure base-files:amd64 14ubuntu6 <none>\n"
+    "2026-04-23 01:18:10 install firefox:amd64 <none> 149.0\n"
+    "2026-04-23 01:18:10 status unpacked firefox:amd64 149.0\n"
+    "2026-04-23 01:20:00 upgrade firefox:amd64 149.0 150.0\n"
+    "2026-09-21 00:44:53 install claude-desktop:amd64 <none> 1.0\n"
+    "2026-09-21 00:44:53 configure claude-desktop:amd64 1.0 <none>\n"
+)
+
+# A log with no installer marker at the top is a log we cannot date the OS from, even
+# with no rotated file in the way: the earliest entry is only the earliest entry.
+_LOG_NO_MARKER = _LOG.replace("2026-04-23 01:15:04 startup archives install\n", "")
+
+
+def _parse_log(text, rotation_dropped=False):
+    """Run the module's own parser over synthetic log text."""
+    with tempfile.TemporaryDirectory() as tmp:
+        log = Path(tmp) / "dpkg.log"
+        log.write_text(text)
+        saved_logs, saved_cache = ow.DPKG_LOGS, ow._log_dates
+        # Slot 0 is the most-rotated file (dpkg.log.3); its absence is what says the log
+        # reaches back to the machine's first dpkg action. The fake log stands in for the
+        # live file, so slot 0 is pointed at a path that does not exist unless the test
+        # is exercising the rotated-past case.
+        oldest = Path(tmp) / "dpkg.log.3"
+        if rotation_dropped:
+            oldest.write_text("2026-04-01 00:00:00 install dropped:amd64 <none> 1\n")
+        ow.DPKG_LOGS = (str(oldest), str(log))
+        ow._log_dates = ow._Cache()
+        try:
+            ow.installed_by_user_package.cache_clear()
+            return ow._build_log_dates()
+        finally:
+            ow.DPKG_LOGS, ow._log_dates = saved_logs, saved_cache
+            ow.installed_by_user_package.cache_clear()
+
+
+_dates, _anchor = _parse_log(_LOG)
+check("the OS install date is the earliest log entry", _anchor, "2026-04-23")
+check("an OS-install package is dated to the OS install",
+      _dates.get("base-files"), "2026-04-23")
+check("a later install keeps its own date",
+      _dates.get("claude-desktop"), "2026-09-21")
+# An upgrade after the fact must not move a package's first-seen date forward: the
+# earliest entry is what says when the package arrived.
+check("an upgrade does not re-date a package",
+      _dates.get("firefox"), "2026-04-23")
+
+# With the oldest rotated log present the true start has been dropped, so the earliest
+# date visible is not the OS install and no package can be classified from it.
+_, _anchor2 = _parse_log(_LOG, rotation_dropped=True)
+check("a rotated-past log yields no anchor", _anchor2, None)
+
+# With no installer marker the log cannot be dated, so no package can be classified.
+_, _anchor_nomark = _parse_log(_LOG_NO_MARKER)
+check("a log without the installer marker yields no anchor", _anchor_nomark, None)
+
+# The real machine: the anchor must be readable, or Simple Mode cannot work at all.
+check("this machine's OS install date is readable",
+      bool(ow.os_install_date()), True)
+
+# End-to-end on the real system: every entry must get a verdict. An "unknown" means the
+# classifier has stopped working, and Simple Mode would have to hide the app to stay
+# safe - which is exactly the failure this module exists to prevent.
+_real = [ow.classify_desktop_entry(r) for r in desktop.collect("simple")]
+check("every real entry is classified, none unknown",
+      all(v is not None for v, _ in _real), True)
+
+# A command that cannot be traced to a package (empty Exec=, TryExec binary absent)
+# must still be dated through the package that ships the .desktop file, so no
+# system-sourced entry with a dpkg-owned file may end up "unowned".
+check("a path no package owns has no owning package",
+      ow.owning_package_of_file(str(Path(tempfile.gettempdir()) / "slpm-no-such-file")),
+      None)
+
+
+def _file_untraceable(r):
+    return (r.get("source") == "system"
+            and not ow.owning_package(r.get("binary", ""))
+            and ow.owning_package_of_file(r.get("file", "")))
+
+
+_left_unowned = [r["name"] for r in desktop.collect("advanced")
+                 if _file_untraceable(r)
+                 and ow.classify_desktop_entry(r)[1] == "unowned"]
+check("an untraceable command still classifies via the file's owning package",
+      _left_unowned, [])
+
+# Startup entries: a user file with no packaged counterpart is the user's; the same file
+# shadowing a packaged entry follows the package instead.
+check("a user-owned startup file is the user's",
+      ow.classify_startup_entry({"source": "user"})[0], True)
+check("a packaged startup entry is not",
+      ow.classify_startup_entry({"source": "system"})[0], False)
+check("an override of a packaged entry is not the user's",
+      ow.classify_startup_entry({"source": "user", "_shadows_packaged": True})[0], False)
+check("an entry SLPM added is the user's",
+      ow.classify_startup_entry({"source": "user", "_slpm_added": True})[0], True)
+
+
+# ------------------------------------------------------- the two views differ
+
+section("Simple and Advanced views")
+
+# The whole point of the split: Simple Mode must be a strict subset of Advanced, and the
+# two must not be the same list. Both halves are checked, because a filter that silently
+# stopped filtering would still look correct from the Simple side alone.
+_simple = apps.apps("simple")
+_adv = apps.apps("advanced")
+check("simple is not empty on this machine", bool(_simple), True)
+check("advanced is a strict superset of simple",
+      len(_adv) > len(_simple), True)
+check("every simple app is marked as the user's",
+      all(a["user_installed"] for a in _simple), True)
+check("no pre-installed app leaks into simple",
+      all(a.get("ownership") in ("package-added", "snap-added", "flatpak-added",
+                                 "user-file")
+          for a in _simple), True)
+check("the advanced view still marks ownership",
+      all("user_installed" in a for a in _adv), True)
+
+_su = autostart.collect("simple")
+_sa = autostart.collect("advanced")
+check("advanced startup shows more than simple",
+      len(_sa) > len(_su), True)
+check("every simple startup entry is the user's",
+      all(a["user_owned"] for a in _su), True)
 
 # The flag is added only where apt would otherwise refuse the removal, so ordinary
 # removals keep the exact command shape they had before.

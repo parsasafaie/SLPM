@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="{{ html_lang }}" dir="{{ html_dir }}" data-lang="{{ lang }}" data-theme="{{ theme }}">
+<html lang="{{ html_lang }}" dir="{{ html_dir }}" data-lang="{{ lang }}" data-theme="{{ theme }}" data-mode="{{ mode }}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -28,6 +28,19 @@
     <a href="{{ url_for('page_install') }}" class="tab {{ 'active' if page == 'install' }}">{{ t('Install') }}</a>
     <a href="{{ url_for('page_apps') }}" class="tab {{ 'active' if page == 'apps' }}">{{ t('Installed Apps') }}</a>
     <a href="{{ url_for('page_startup') }}" class="tab {{ 'active' if page == 'startup' }}">{{ t('Startup Apps') }}</a>
+    {# The Simple/Advanced switch lives in the tab row because it is not a property of
+       one tab: it decides what the whole app treats as yours, and it stays put while
+       you move between the tabs it applies to. The Install tab has nothing to switch -
+       installing a file works the same either way - so the control is not rendered
+       there at all rather than sitting there doing nothing. #}
+    {% if page in ('apps', 'startup') %}
+    <div class="mode-switch" role="group" aria-label="{{ t('View mode') }}">
+      <button type="button" class="mode-btn {{ 'active' if mode == 'simple' }}"
+              data-mode="simple" aria-pressed="{{ 'true' if mode == 'simple' else 'false' }}">{{ t('Simple') }}</button>
+      <button type="button" class="mode-btn {{ 'active' if mode == 'advanced' }}"
+              data-mode="advanced" aria-pressed="{{ 'true' if mode == 'advanced' else 'false' }}">{{ t('Advanced') }}</button>
+    </div>
+    {% endif %}
   </nav>
   <div class="env">
     <span class="pill {{ 'warn' if not env.helper_up and not env.is_root }}" id="helper-pill">

@@ -19,7 +19,9 @@
 const SLPM = (() => {
   const COOKIE_LANG = 'slpm_lang';
   const COOKIE_THEME = 'slpm_theme';
+  const COOKIE_MODE = 'slpm_mode';
   const LANGS = ['en', 'fa'];
+  const MODES = ['simple', 'advanced'];
 
   function cookie(name) {
     const hit = document.cookie.split('; ').find(c => c.startsWith(`${name}=`));
@@ -42,7 +44,18 @@ const SLPM = (() => {
   const state = {
     lang: normalize(document.documentElement.dataset.lang || cookie(COOKIE_LANG)),
     theme: document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light',
+    mode: MODES.includes(document.documentElement.dataset.mode)
+      ? document.documentElement.dataset.mode : 'simple',
+    /* Advanced Mode has been accepted in this page view. The cookie remembers the
+       choice across pages, but the warning is shown once per load, so a page the user
+       opened fresh does not silently start in the dangerous view. */
+    modeAllowed: false,
   };
+
+  /* Notified whenever the mode changes, so the tab scripts can re-read and re-render
+     without either of them owning the switch. */
+  const modeListeners = [];
+  function onModeChange(fn) { modeListeners.push(fn); }
 
   /* Keys are the exact English sentences the scripts pass to T(). Values are the
      Persian renderings. A sentence missing here is shown in English rather than
@@ -79,14 +92,22 @@ const SLPM = (() => {
       'همهٔ بسته‌های نصب‌شده، شامل اجزای سیستمی.',
     'Everyday applications on this computer.':
       'برنامه‌های روزمرهٔ این کامپیوتر.',
-    'Switch to Advanced Mode?': 'به حالت پیشرفته برویم؟',
-    'Stay in Simple Mode': 'در حالت ساده بمان',
-    'I understand, continue': 'می‌فهمم، ادامه بده',
+    ['Only the apps you installed yourself. Switch to Advanced to see everything the '
+      + 'system came with.']:
+      'فقط برنامه‌هایی که خودتان نصب کرده‌اید. برای دیدن هر چیزی که همراه سیستم آمده '
+      + 'به حالت پیشرفته بروید.',
     'Reading installed programs…': 'در حال خواندن برنامه‌های نصب‌شده…',
+    'Reading your installed apps…': 'در حال خواندن برنامه‌های نصب‌شدهٔ شما…',
     'Reading the package database…': 'در حال خواندن پایگاه‌دادهٔ بسته‌ها…',
     'Could not list apps': 'فهرست برنامه‌ها خوانده نشد',
     'Could not list packages': 'فهرست بسته‌ها خوانده نشد',
     'No applications matched.': 'برنامه‌ای مطابقت نداشت.',
+    ['You have not installed any apps yourself yet. Switch to Advanced to see everything '
+      + 'the system came with.']:
+      'هنوز هیچ برنامه‌ای را خودتان نصب نکرده‌اید. برای دیدن هر چیزی که همراه سیستم آمده '
+      + 'به حالت پیشرفته بروید.',
+    'This is only available in Advanced Mode.':
+      'این مورد فقط در حالت پیشرفته در دسترس است.',
     'Nothing matched “{q}”.': 'چیزی با «{q}» مطابقت نداشت.',
     'Showing the first 600 of {n} items — narrow the search to see the rest.':
       'نمایش ۶۰۰ مورد اول از {n} مورد — برای دیدن بقیه جست‌وجو را محدود کنید.',
@@ -152,6 +173,18 @@ const SLPM = (() => {
     'No applications matched.': 'برنامه‌ای مطابقت نداشت.',
     'Could not list startup apps': 'فهرست برنامه‌های هنگام ورود خوانده نشد',
     'Reading startup programs…': 'در حال خواندن برنامه‌های هنگام ورود…',
+    ['Programs that start by themselves when you log in, including the ones the system '
+      + 'set up.']:
+      'برنامه‌هایی که هنگام ورود شما خودکار اجرا می‌شوند، همراه با آن‌هایی که سیستم '
+      + 'تنظیم کرده است.',
+    ['Only the startup apps you added yourself. Switch to Advanced to see everything '
+      + 'that starts with the session.']:
+      'فقط برنامه‌های هنگام ورودی که خودتان اضافه کرده‌اید. برای دیدن هر چیزی که با '
+      + 'ورود شما اجرا می‌شود به حالت پیشرفته بروید.',
+    ['You have not added any startup apps yourself yet. Switch to Advanced to see '
+      + 'everything the system starts on its own.']:
+      'هنوز هیچ برنامهٔ هنگام ورودی خودتان اضافه نکرده‌اید. برای دیدن هر چیزی که '
+      + 'سیستم خودش اجرا می‌کند به حالت پیشرفته بروید.',
     'yours': 'مال شما',
     'turned off': 'خاموش',
     'Saving…': 'در حال ذخیره…',
@@ -182,6 +215,11 @@ const SLPM = (() => {
     'Switch to dark theme': 'تغییر به تم تاریک',
     'Switch to light theme': 'تغییر به تم روشن',
 
+    /* The Advanced Mode warning, shown by prefs.js when the switch is used. */
+    'Switch to Advanced Mode?': 'به حالت پیشرفته برویم؟',
+    'Stay in Simple Mode': 'در حالت ساده بمان',
+    'I understand, continue': 'می‌فهمم، ادامه بده',
+
     /* --- Warning boxes and dialogs, where the browser prints the whole paragraph.
            Each of these is one key written as a bracketed concatenation. --- */
     ['This is a system component. Removing it can stop programs from working or '
@@ -201,10 +239,10 @@ const SLPM = (() => {
       + 'به فایل‌های شخصی شما دستی زده نمی‌شود.',
     'The shortcut and the installed files for this app will be deleted.':
       'میان‌بر و فایل‌های نصب‌شدهٔ این برنامه حذف می‌شوند.',
-    ['Advanced Mode displays critical system components. Removing essential packages '
-      + 'may break your operating system.']:
-      'حالت پیشرفته اجزای حیاتی سیستم را نشان می‌دهد. حذف بسته‌های حیاتی می‌تواند '
-      + 'سیستم‌عامل شما را از کار بیندازد.',
+    ['Advanced Mode shows the software the system came with, including critical system '
+      + 'components. Removing essential packages may break your operating system.']:
+      'حالت پیشرفته نرم‌افزاری را نشان می‌دهد که همراه سیستم آمده، شامل اجزای حیاتی '
+      + 'سیستم. حذف بسته‌های حیاتی می‌تواند سیستم‌عامل شما را از کار بیندازد.',
     ['Proceed with caution. In this view you can see and remove libraries, drivers '
       + 'and core services — not just applications. Windows programs never expose '
       + 'this, because on Linux a wrong removal can leave the computer unable to '
@@ -213,6 +251,10 @@ const SLPM = (() => {
       + 'می‌بینید و می‌توانید حذفشان کنید — نه فقط برنامه‌ها. نرم‌افزارهای ویندوزی '
       + 'هرگز این را نشان نمی‌دهند، چون در لینوکس یک حذف اشتباه می‌تواند کامپیوتر را '
       + 'از روشن‌شدن باز دارد.',
+    ['Simple Mode shows only the apps you installed yourself. You can switch back at '
+      + 'any time.']:
+      'حالت ساده فقط برنامه‌هایی را نشان می‌دهد که خودتان نصب کرده‌اید. هر زمان '
+      + 'بخواهید می‌توانید برگردید.',
     'App and package name searches still work normally.':
       'جست‌وجوی نام برنامه‌ها و بسته‌ها مثل قبل کار می‌کند.',
     ['Packages that were installed automatically as dependencies and are no longer '
@@ -340,7 +382,69 @@ const SLPM = (() => {
     setLang(state.lang === 'fa' ? 'en' : 'fa');
   }
 
-  return { state, tt, setLang, setTheme, toggleLang, toggleTheme, applyTheme, normalize };
+  /* ------------------------------------------------------------ view mode
+   *
+   * Simple and Advanced are a property of the whole app, not of one tab: Simple shows
+   * only what the user put on the machine themselves, Advanced shows everything the
+   * system came with as well. The switch lives in the tab row (see base.html) and both
+   * tab scripts listen for the change rather than owning it.
+   */
+
+  /** Remember the mode for this browser, and repaint the switch. */
+  function applyMode(mode) {
+    state.mode = MODES.includes(mode) ? mode : 'simple';
+    document.documentElement.dataset.mode = state.mode;
+    document.querySelectorAll('.mode-btn').forEach(btn => {
+      const on = btn.dataset.mode === state.mode;
+      btn.classList.toggle('active', on);
+      btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+    setCookie(COOKIE_MODE, state.mode);
+    fetch('/api/prefs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mode: state.mode }),
+    }).catch(() => { /* the cookie is already set; the server copy is a nicety */ });
+  }
+
+  /** Switch mode. Entering Advanced asks first; leaving it needs no ceremony. */
+  function setMode(mode) {
+    const next = MODES.includes(mode) ? mode : 'simple';
+    if (next === state.mode) return;
+    if (next === 'advanced' && !state.modeAllowed) return askAdvanced();
+    applyMode(next);
+    modeListeners.forEach(fn => fn(state.mode));
+  }
+
+  /* The safety gate. Advanced Mode lists libraries, drivers and core services next to
+     applications, and removing the wrong one can leave the computer unable to start -
+     so the first entry into it in a page view is confirmed, not assumed. */
+  function askAdvanced() {
+    modal({
+      title: tt('Switch to Advanced Mode?'),
+      html: `<p>${esc(tt('Advanced Mode shows the software the system came with, '
+        + 'including critical system components. Removing essential packages may break '
+        + 'your operating system.'))}</p>
+           <div class="warn-box">${esc(tt('Proceed with caution. In this view you can '
+        + 'see and remove libraries, drivers and core services — not just applications. '
+        + 'Windows programs never expose this, because on Linux a wrong removal can '
+        + 'leave the computer unable to start.'))}</div>
+           <p class="small muted">${esc(tt('Simple Mode shows only the apps you '
+        + 'installed yourself. You can switch back at any time.'))}</p>`,
+      buttons: [
+        { label: tt('Stay in Simple Mode'), kind: 'ghost', onClick: closeModal },
+        { label: tt('I understand, continue'), kind: 'danger', onClick: () => {
+            state.modeAllowed = true;
+            closeModal();
+            applyMode('advanced');
+            modeListeners.forEach(fn => fn(state.mode));
+          } }
+      ]
+    });
+  }
+
+  return { state, tt, setLang, setTheme, toggleLang, toggleTheme, applyTheme, normalize,
+           setMode, applyMode, onModeChange, askAdvanced };
 })();
 
 /** Shorthand used across the page scripts. */

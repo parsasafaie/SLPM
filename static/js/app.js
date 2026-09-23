@@ -82,3 +82,9 @@ document.addEventListener('keydown', e => {
 
 $('#theme-toggle') && ($('#theme-toggle').onclick = () => SLPM.toggleTheme());
 $('#lang-toggle') && ($('#lang-toggle').onclick = () => SLPM.toggleLang());
+
+/* The Simple/Advanced switch in the tab row. It is rendered by the template (see
+   base.html), so a page that has no switch simply has no buttons to wire. */
+$$('.mode-btn').forEach(btn => {
+  btn.onclick = () => SLPM.setMode(btn.dataset.mode);
+});

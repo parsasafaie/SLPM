@@ -227,6 +227,8 @@ _FA = {
     "No file chooser is installed on this computer. Paste the file path instead.":
         "روی این کامپیوتر هیچ برنامهٔ انتخاب فایلی نصب نیست. مسیر فایل را بچسبانید.",
     "Unknown endpoint.": "نقطهٔ پایانی ناشناخته.",
+    "This is only available in Advanced Mode.":
+        "این مورد فقط در حالت پیشرفته در دسترس است.",
 
     # ------------------------------------------------- the page itself (templates)
     # Strings the server renders straight into the HTML. Package names, file
@@ -270,6 +272,7 @@ _FA = {
         "برنامه‌های روزمرهٔ این کامپیوتر.",
     "Simple": "ساده",
     "Advanced": "پیشرفته",
+    "View mode": "حالت نمایش",
     "Search apps…": "جست‌وجوی برنامه‌ها…",
     "Filter": "صافی",
     "All sources": "همهٔ منابع",

@@ -1,6 +1,6 @@
-"""Build the Simple Mode app list.
+"""Build the Installed Apps list.
 
-Simple Mode is driven purely by .desktop entries: an app is listed only if a desktop
+The list is driven purely by .desktop entries: an app is listed only if a desktop
 environment would put its icon in the application menu. Snap and Flatpak are never
 queried to decide *what* to list - they are visible only through the entries they
 export, which is what excludes their runtimes, bases and platforms (mesa-2404, core22,
@@ -10,11 +10,20 @@ They are queried for *metadata* and for *removal target*: a listed snap or flatp
 is removed through `snap remove` / `flatpak uninstall`, not by deleting its exported
 .desktop file. Deleting the entry would leave the package installed with no icon to
 find it by again.
+
+Two views come out of the same scan:
+
+  simple    only applications the user installed themselves.
+  advanced  everything in the menu, the software the system came with included.
+
+Which of the two an app belongs to is decided by slpm/ownership.py, from the package
+manager's own record of when it arrived - never from the directory its entry sits in,
+which is identical for `apt install ./vryon.deb` and for a package that shipped with
+the distribution.
 """
 from functools import lru_cache
-import shutil
 
-from . import apt, desktop
+from . import apt, desktop, ownership
 from .i18n import tr as _tr
 
 
@@ -25,34 +34,31 @@ def _t(english, **values):
     return _tr(proc.lang(), english, **values)
 
 
-def _owner(binary):
-    """Which installed package provides this program, if any.
+def _owner(binary, file_path):
+    """Which installed package provides this app, if any.
 
     Exec= holds either an absolute path or a bare command name, and dpkg-query -S only
     understands paths, so a bare name is resolved on PATH first. Without this, most
     entries (libreoffice, rhythmbox, transmission-gtk) would look unowned and be
-    offered no way to remove them.
+    offered no way to remove them. When the command itself cannot be traced (empty
+    Exec=, TryExec binary absent), the package that ships the .desktop file is the
+    same evidence, and keeps removal aimed at the real package rather than the file.
     """
-    if not binary:
-        return None
-    path = binary if binary.startswith("/") else shutil.which(binary)
-    if not path:
-        return None
-    from . import proc
-
-    rc, out, _ = proc.run(["dpkg-query", "-S", path], timeout=20)
-    if rc == 0 and ":" in out:
-        return out.split(":", 1)[0].strip()
-    return None
+    return ownership.owning_package(binary) or ownership.owning_package_of_file(file_path)
 
 
-def apps():
-    """Simple Mode rows: one per application that appears in the user's app menu."""
+def apps(mode="simple"):
+    """Rows for one view: the user's own apps, or every app including the system's.
+
+    `mode` is 'simple' or 'advanced'. The filtering happens here rather than in the
+    browser so that Simple Mode cannot be made to show or remove a pre-installed app by
+    calling the API directly.
+    """
     rows = []
-    for rec in desktop.collect("simple"):
+    for rec in desktop.collect("simple" if mode == "simple" else "advanced"):
         binary = rec.get("binary", "")
         provided_by = rec.get("provided_by", "")
-        pkg = _owner(binary)
+        pkg = _owner(binary, rec.get("file", ""))
 
         # A snap or flatpak entry is removed through its own manager; a packaged
         # binary through apt; an AppImage through the shortcut SLPM wrote.
@@ -69,6 +75,16 @@ def apps():
         rec["manager"] = manager
         rec["size"] = ""
         rec["version"] = ""
+
+        # Ownership decides membership, so it has to be resolved before the entry can be
+        # kept or dropped. The owning package is already known here, so it is passed in
+        # rather than looked up a second time.
+        user_installed, reason = ownership.classify_desktop_entry({**rec, "package": pkg})
+        rec["user_installed"] = bool(user_installed)
+        rec["ownership"] = reason
+        if mode == "simple" and not user_installed:
+            continue
+
         if manager == "snap":
             meta = _snap_meta(target)
         elif manager == "flatpak":
@@ -85,9 +101,7 @@ def apps():
 
         # Everything in this list is an application the user can see in their menu, so
         # everything in it can be removed from here - snap and flatpak included, through
-        # their own manager. Leaving them unremovable made Simple Mode show snap apps
-        # that Advanced Mode could remove but Simple Mode could not, which is the view
-        # most users are in.
+        # their own manager.
         rec["removable"] = bool(meta) or manager == "appimage"
         rec["icon_url"] = f"/api/icon?name={rec['icon']}&app={rec['id']}" if rec["icon"] else ""
         rows.append(rec)

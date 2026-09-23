@@ -132,6 +132,25 @@ code { font-family: var(--mono); background: var(--inset); padding: .1rem .35rem
 }
 .tab:hover { color: var(--text); }
 .tab.active { background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
+
+/* The Simple/Advanced switch sits inside the tab row but is set apart from the tabs by
+   a divider: the tabs navigate, this one changes what the pages show. Keeping the pill
+   shape makes it read as part of the row, and the divider marks it as a different kind
+   of control. */
+.mode-switch {
+  display: flex; gap: .2rem; align-items: center; margin-left: .35rem;
+  padding-left: .5rem; border-left: 1px solid var(--line);
+}
+.mode-btn {
+  font: inherit; font-weight: 600; font-size: .86rem; padding: .42rem .9rem;
+  border: 0; background: transparent; color: var(--muted); border-radius: 9px;
+  cursor: pointer; transition: background .15s, color .15s;
+}
+.mode-btn:hover { color: var(--text); background: var(--hover); }
+.mode-btn.active { background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
+/* Advanced can remove what the machine needs to boot, so its active state carries the
+   warning colour instead of looking exactly like a selected tab. */
+.mode-btn.active[data-mode="advanced"] { color: var(--warn); }
 .pill {
   font-size: .78rem; font-weight: 600; padding: .35rem .7rem; border-radius: 999px;
   background: var(--info-bg); color: var(--info-text); white-space: nowrap;
@@ -333,8 +352,15 @@ dl.kv dd { margin: 0; overflow-wrap: anywhere; }
 @media (max-width: 900px) {
   .list { grid-template-columns: 1fr; }
   .topbar { flex-wrap: wrap; gap: .8rem; }
-  .tabs { margin-left: 0; order: 3; width: 100%; }
+  /* The tab row wraps to its own line here, and the mode switch rides along with it -
+     the divider goes away because the two now stack rather than sit side by side. */
+  .tabs { margin-left: 0; order: 3; width: 100%; flex-wrap: wrap; }
   .tab { flex: 1; text-align: center; }
+  .mode-switch {
+    flex: 1 0 100%; margin: .25rem 0 0; padding: .35rem 0 0;
+    border-left: 0; border-top: 1px solid var(--line); justify-content: center;
+  }
+  .mode-btn { flex: 1; }
   main { padding: 1.2rem 1rem 3rem; }
   .switcher { width: 100%; }
   .switch { flex: 1; }

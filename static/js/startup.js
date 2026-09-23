@@ -3,9 +3,15 @@
  * The list is rebuilt from the server after every change rather than edited in place,
  * because a system entry and its user override are the same row and only the server
  * knows which file a toggle actually landed in.
+ *
+ * The Simple/Advanced switch lives in the tab row (base.html) and is owned by prefs.js,
+ * because the choice applies to the Installed Apps tab too. In Simple mode the list is
+ * the user's own entries only, and their switch-off control is the only one offered -
+ * the entries packages installed are Advanced Mode's business.
  */
 
 const state = {
+  mode: SLPM.state.mode,
   items: [],
   query: '',
   filter: 'all',
@@ -19,6 +25,31 @@ function setLoading(on, text) {
   loader.classList.toggle('hidden', !on);
   if (on && text) $('span', loader).textContent = text;
   if (on) { listEl.innerHTML = ''; empty.classList.add('hidden'); }
+}
+
+/* ------------------------------------------------------------ mode switch */
+
+/* prefs.js tells us when the switch was used; the page only has to repaint itself. */
+SLPM.onModeChange(mode => {
+  state.mode = mode;
+  applyModeChrome();
+  load();
+});
+
+function applyModeChrome() {
+  const advanced = state.mode === 'advanced';
+  $('#subtitle').textContent = advanced
+    ? T('Programs that start by themselves when you log in, including the ones the '
+        + 'system set up.')
+    : T('Only the startup apps you added yourself. Switch to Advanced to see everything '
+        + 'that starts with the session.');
+  // The system/yours split only exists in the advanced list, where both appear.
+  const opt = $('#filter').querySelector('option[value="system"]');
+  if (opt) opt.hidden = !advanced;
+  if (!advanced && state.filter === 'system') {
+    state.filter = 'all';
+    $('#filter').value = 'all';
+  }
 }
 
 /* --------------------------------------------------------------- loading */
@@ -41,15 +72,21 @@ function render() {
       (i.comment || '').toLowerCase().includes(q) ||
       (i.exec || '').toLowerCase().includes(q));
   }
+  // The source filter follows ownership, so "yours" means the same thing here as it
+  // does in the badge and in what Simple Mode shows.
   if (state.filter === 'disabled') items = items.filter(i => !i.enabled);
-  else if (state.filter !== 'all') items = items.filter(i => i.source === state.filter);
+  else if (state.filter === 'user') items = items.filter(i => i.user_owned);
+  else if (state.filter === 'system') items = items.filter(i => !i.user_owned);
 
   listEl.innerHTML = '';
   if (!items.length) {
     empty.classList.remove('hidden');
     $('#empty-note').textContent = state.query
       ? T('Nothing matched “{q}”.', { q: state.query })
-      : T('No startup programs matched.');
+      : (state.mode === 'simple'
+          ? T('You have not added any startup apps yourself yet. Switch to Advanced to '
+              + 'see everything the system starts on its own.')
+          : T('No startup programs matched.'));
     return;
   }
   empty.classList.add('hidden');
@@ -64,8 +101,11 @@ function row(item) {
   const icon = item.icon_url
     ? `<img src="${esc(item.icon_url)}" alt="" loading="lazy">`
     : `<span class="letter">${esc((item.name || '?').trim().charAt(0).toUpperCase())}</span>`;
+  // The source badge is only meaningful where both kinds are on screen. In Simple Mode
+  // every row is the user's, so a badge saying so on every one of them is noise.
   const badges = [
-    `<span class="badge">${esc(item.source === 'user' ? T('yours') : T('system'))}</span>`,
+    state.mode === 'advanced'
+      ? `<span class="badge">${esc(item.user_owned ? T('yours') : T('system'))}</span>` : '',
     item.enabled ? '' : `<span class="badge danger">${esc(T('turned off'))}</span>`,
   ].join('');
   // The command is shown rather than the file path: it is what the user recognises, and
@@ -77,7 +117,12 @@ function row(item) {
       <span>${meta}</span>
     </div>
     <div class="actions"></div>`;
-  if (item.enabled) $('.actions', el).appendChild(closeButton(item));
+  // Only an entry the user owns can be switched off from here. The server refuses the
+  // rest anyway; not drawing the control is what keeps the rule visible rather than
+  // something the user discovers by being told no.
+  if (item.enabled && (state.mode === 'advanced' || item.user_owned)) {
+    $('.actions', el).appendChild(closeButton(item));
+  }
   return el;
 }
 
@@ -199,4 +244,7 @@ $('#filter').addEventListener('change', e => { state.filter = e.target.value; re
 $('#refresh').onclick = load;
 $('#add').onclick = addDialog;
 
+/* The page opens in whatever mode the server rendered (see base.html), so the chrome
+   has to follow that before the first load rather than assuming simple. */
+applyModeChrome();
 load();

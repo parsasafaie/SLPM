@@ -158,6 +158,10 @@ def _collect_from(roots):
     Disabled entries are listed too: a startup manager that hides what it has switched
     off gives the user no way to switch it back on.
     """
+    packaged_names = {
+        p.name for p in SYSTEM_AUTOSTART.glob("*.desktop")
+    } if SYSTEM_AUTOSTART.is_dir() else set()
+
     rows = {}
     for root, source in roots:
         if not root.is_dir():
@@ -182,18 +186,56 @@ def _collect_from(roots):
                 # Only a file SLPM can write counts as removable. A system entry is
                 # switched off with an override, never deleted.
                 "removable": source == "user",
+                # Ownership evidence, used by the Simple/Advanced split. A user file that
+                # shares its name with a packaged one is an override of that packaged
+                # entry, not something the user invented; a file SLPM named itself was
+                # added through SLPM by the user.
+                "_shadows_packaged": source == "user" and path.name in packaged_names,
+                "_slpm_added": source == "user" and path.name.startswith(PREFIX),
                 "icon_url": (f"/api/icon?name={icon}&app={path.name}" if icon else ""),
             }
     return sorted(rows.values(), key=lambda r: r["name"].lower())
 
 
-def collect():
-    """Everything that starts with the session, the user's files overriding system ones."""
-    return _collect_from(((SYSTEM_AUTOSTART, "system"), (USER_AUTOSTART, "user")))
+def collect(mode="advanced"):
+    """Everything that starts with the session, the user's files overriding system ones.
+
+    mode='advanced'  all of it, the entries packages installed included.
+    mode='simple'    only the entries the user put there themselves.
+
+    The split follows the override rule rather than the directory: a file in
+    ~/.config/autostart with no packaged counterpart of the same name is the user's
+    own; the same file shadowing a packaged entry is an override of that packaged
+    entry and follows it. See slpm/ownership.py.
+    """
+    rows = _collect_from(((SYSTEM_AUTOSTART, "system"), (USER_AUTOSTART, "user")))
+    from . import ownership
+
+    for rec in rows:
+        user_owned, reason = ownership.classify_startup_entry(rec)
+        rec["user_owned"] = bool(user_owned)
+        rec["ownership"] = reason
+    if mode == "simple":
+        rows = [r for r in rows if r["user_owned"]]
+    return rows
 
 
 def _find(entry_id):
     return next((r for r in collect() if r["id"] == entry_id), None)
+
+
+def user_owned(entry_id):
+    """Did the user put this startup entry there themselves?
+
+    The API asks this before honouring a change, so Simple Mode cannot be made to switch
+    off a package's startup entry by posting its id directly.
+    """
+    rec = _find(entry_id)
+    if rec is None:
+        return None
+    from . import ownership
+
+    return bool(ownership.classify_startup_entry(rec)[0])
 
 
 def add(name, exec_line, icon="", comment=""):

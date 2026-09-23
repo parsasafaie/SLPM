@@ -21,7 +21,9 @@ app.config["JSON_SORT_KEYS"] = False
 
 LANG_COOKIE = "slpm_lang"
 THEME_COOKIE = "slpm_theme"
+MODE_COOKIE = "slpm_mode"
 THEMES = ("light", "dark")
+MODES = ("simple", "advanced")
 
 _install_lock = threading.Lock()
 _job = {"active": False, "label": ""}
@@ -51,6 +53,21 @@ def _ui_theme():
     return theme if theme in THEMES else "light"
 
 
+def _ui_mode():
+    """Simple or Advanced, for this request.
+
+    A cookie like the theme and the language, and for the same reason: it is one
+    person's choice on one browser, and a server-side setting would hand the next
+    person to open the page a view they did not ask for.
+
+    Simple is the default. Advanced is the view that can remove a package the machine
+    needs to boot, so it has to be entered deliberately - never arrived at by opening a
+    fresh browser.
+    """
+    mode = (request.cookies.get(MODE_COOKIE) or "").strip().lower()
+    return mode if mode in MODES else "simple"
+
+
 @app.before_request
 def _adopt_language():
     """Make this request's language visible to every backend module.
@@ -68,6 +85,7 @@ def _template_defaults():
     return {
         "lang": lang,
         "theme": _ui_theme(),
+        "mode": _ui_mode(),
         "html_lang": i18n.HTML_LANGS[lang],
         "html_dir": i18n.DIRECTIONS[lang],
         "t": lambda english, **values: i18n.tr(lang, english, **values),
@@ -76,7 +94,7 @@ def _template_defaults():
 
 @app.post("/api/prefs")
 def api_prefs():
-    """Remember the language and/or theme choice for this browser."""
+    """Remember the language, theme and/or view mode choice for this browser."""
     data = request.json or {}
     resp = make_response(jsonify({"ok": True}))
     max_age = 60 * 60 * 24 * 365
@@ -87,6 +105,10 @@ def api_prefs():
         theme = str(data.get("theme") or "").strip().lower()
         if theme in THEMES:
             resp.set_cookie(THEME_COOKIE, theme, max_age=max_age, samesite="Lax")
+    if "mode" in data:
+        mode = str(data.get("mode") or "").strip().lower()
+        if mode in MODES:
+            resp.set_cookie(MODE_COOKIE, mode, max_age=max_age, samesite="Lax")
     return resp
 
 
@@ -187,8 +209,15 @@ def api_helper_start():
 
 @app.get("/api/apps")
 def api_apps():
+    """Applications in the current view.
+
+    The mode comes from the request, never from the client's word alone: in Simple Mode
+    the server itself drops everything the user did not install, so a hand-made request
+    cannot make a pre-installed app appear in the simple list.
+    """
     try:
-        return jsonify({"ok": True, "apps": apps_mod.apps()})
+        mode = _ui_mode()
+        return jsonify({"ok": True, "mode": mode, "apps": apps_mod.apps(mode)})
     except Exception as exc:
         return _err(exc)
 
@@ -245,7 +274,13 @@ def api_launch():
 
 @app.post("/api/uninstall")
 def api_uninstall():
-    """One-click removal from Simple Mode."""
+    """Removal of one application from the Installed Apps list.
+
+    In Simple Mode this must be the user's own app. The check re-derives ownership from
+    the server's own records instead of trusting the request, so posting the id of a
+    pre-installed app cannot remove it: the app has to be found in the very list Simple
+    Mode would show.
+    """
     data = request.json or {}
     if _job["active"]:
         return _busy_reply()
@@ -253,6 +288,8 @@ def api_uninstall():
     if not target:
         return jsonify({"ok": False,
                         "message": proc.t("Nothing was named to remove.")}), 400
+    if _ui_mode() != "advanced" and not _user_installed_app(data):
+        return _advanced_only()
     with _install_lock:
         _job.update(active=True, label=proc.t("Removal"))
         try:
@@ -278,8 +315,15 @@ def api_uninstall():
 
 @app.get("/api/startup")
 def api_startup():
+    """Startup entries in the current view.
+
+    Simple Mode returns only the entries the user put there themselves; the entries
+    packages installed are Advanced Mode's business. The split is made here rather than
+    in the browser so the simple list cannot be padded out by a hand-made request.
+    """
     try:
-        return jsonify({"ok": True, "apps": autostart.collect()})
+        mode = _ui_mode()
+        return jsonify({"ok": True, "mode": mode, "apps": autostart.collect(mode)})
     except Exception as exc:
         return _err(exc)
 
@@ -290,10 +334,14 @@ def api_startup_candidates():
 
     The add dialog lists these instead of asking for a command line, so an added entry
     runs the same program the menu runs. Only entries with a launch command are offered.
+
+    The candidates follow the current view: in Simple Mode the list offers the user's own
+    apps, so the dialog cannot be used to add an app the view does not show. A launch
+    command is still required either way.
     """
     try:
         rows = []
-        for rec in desktop.collect("simple"):
+        for rec in apps_mod.apps(_ui_mode()):
             command = autostart.clean_exec(rec["exec"])
             if not command:
                 continue
@@ -325,10 +373,18 @@ def api_startup_add():
 
 @app.post("/api/startup/toggle")
 def api_startup_toggle():
+    """Turn one startup entry on or off.
+
+    In Simple Mode the entry has to be one the user put there themselves. Ownership is
+    re-derived from the server's own records, so posting the id of a package's entry
+    cannot switch it off from Simple Mode.
+    """
     data = request.json or {}
+    entry_id = data.get("id", "")
+    if _ui_mode() != "advanced" and autostart.user_owned(entry_id) is not True:
+        return _advanced_only()
     try:
-        ok, msg, detail = autostart.set_enabled(data.get("id", ""),
-                                                bool(data.get("enabled")))
+        ok, msg, detail = autostart.set_enabled(entry_id, bool(data.get("enabled")))
         return jsonify({"ok": ok, "message": msg, "detail": detail})
     except Exception as exc:
         return _err(exc)
@@ -337,8 +393,11 @@ def api_startup_toggle():
 @app.post("/api/startup/remove")
 def api_startup_remove():
     data = request.json or {}
+    entry_id = data.get("id", "")
+    if _ui_mode() != "advanced" and autostart.user_owned(entry_id) is not True:
+        return _advanced_only()
     try:
-        ok, msg, detail = autostart.remove(data.get("id", ""))
+        ok, msg, detail = autostart.remove(entry_id)
         return jsonify({"ok": ok, "message": msg, "detail": detail})
     except Exception as exc:
         return _err(exc)
@@ -348,6 +407,15 @@ def api_startup_remove():
 
 @app.get("/api/packages")
 def api_packages():
+    """Every installed package - Advanced Mode only.
+
+    This is the view that exposes libraries, drivers and core services, so it is refused
+    outright outside Advanced Mode rather than filtered: a filtered package database
+    would still be a package database, and the point of Simple Mode is that this list is
+    not reachable at all.
+    """
+    if _ui_mode() != "advanced":
+        return _advanced_only()
     try:
         pkgs = apt.list_installed()
         return jsonify({"ok": True, "count": len(pkgs), "packages": pkgs})
@@ -355,8 +423,33 @@ def api_packages():
         return _err(exc)
 
 
+def _advanced_only():
+    return jsonify({"ok": False, "advanced_only": True,
+                    "message": proc.t("This is only available in Advanced Mode.")}), 403
+
+
+def _user_installed_app(data):
+    """Is the app this removal request names one the user installed themselves?
+
+    The request carries a removal target (a package name, a snap id, a desktop entry
+    id), and the app it belongs to has to be found in the Simple list. Ownership is
+    never taken from the request: an app that Simple Mode would not show is not
+    removable from Simple Mode, whatever the request claims about it.
+    """
+    target = str(data.get("target") or "")
+    file_name = str(data.get("file") or "")
+    for rec in apps_mod.apps("simple"):
+        if target and target in (rec.get("package"), rec.get("id")):
+            return True
+        if file_name and file_name == rec.get("file"):
+            return True
+    return False
+
+
 @app.get("/api/packages/<name>")
 def api_package(name):
+    if _ui_mode() != "advanced":
+        return _advanced_only()
     try:
         info = apt.show(name)
         if not info:
@@ -372,6 +465,8 @@ def api_package(name):
 
 @app.post("/api/packages/remove")
 def api_package_remove():
+    if _ui_mode() != "advanced":
+        return _advanced_only()
     data = request.json or {}
     if _job["active"]:
         return _busy_reply()
@@ -397,6 +492,8 @@ def api_package_remove():
 
 @app.post("/api/packages/autoremove")
 def api_autoremove():
+    if _ui_mode() != "advanced":
+        return _advanced_only()
     if _job["active"]:
         return _busy_reply()
     with _install_lock:
