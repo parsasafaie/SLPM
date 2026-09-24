@@ -4,8 +4,8 @@
 {% block content %}
 <section class="hero row-between">
   <div>
-    <h2>{{ t('Installed apps') }}</h2>
-    <p class="muted" id="subtitle">{{ t('Everyday applications on this computer.') }}</p>
+    <h2>{{ t('Installed Apps') }}</h2>
+    <p class="muted" id="subtitle">{{ t('Installed apps on this computer.') }}</p>
   </div>
 </section>
 
@@ -17,7 +17,7 @@
     <input id="search" type="search" placeholder="{{ t('Search apps…') }}" autocomplete="off">
   </div>
   <select id="filter" class="select" aria-label="{{ t('Filter') }}">
-    <option value="all">{{ t('All sources') }}</option>
+    <option value="all">{{ t('All packages') }}</option>
     <option value="apt">{{ t('System packages') }}</option>
     <option value="appimage">AppImage</option>
     <option value="flatpak">Flatpak</option>
@@ -30,10 +30,10 @@
 <div id="list" class="list"></div>
 <div id="empty" class="empty hidden">
   <h3>{{ t('Nothing to show') }}</h3>
-  <p class="muted" id="empty-note">{{ t('No applications matched.') }}</p>
+  <p class="muted" id="empty-note">{{ t('No apps matched.') }}</p>
 </div>
 
-<div id="loader" class="loader hidden"><div class="spinner"></div><span>{{ t('Reading installed programs…') }}</span></div>
+<div id="loader" class="loader hidden"><div class="spinner"></div><span>{{ t('Reading installed apps…') }}</span></div>
 {% endblock %}
 
 {% block scripts %}<script src="{{ url_for('static', filename='js/apps.js') }}"></script>{% endblock %}

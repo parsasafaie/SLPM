@@ -135,9 +135,9 @@ pathInput.addEventListener('keydown', e => {
 });
 
 /* ---------------------------------------------------------------- downloads
-   A pasteable link is downloaded by the app into the Downloads folder. A bar at
-   the bottom tracks every download (pause / continue / stop); once one finishes it
-   points the installer at the saved file and installs it automatically. */
+   A link is downloaded by the app into the Downloads folder in the background. A bar at
+   the bottom tracks every download (pause / continue / stop). When one finishes, SLPM
+   tries to detect and install the saved file unless another file is already selected. */
 
 const downloadUrl = $('#download-url');
 const downloadBtn = $('#download-btn');
@@ -169,8 +169,9 @@ function setDownloadHint(msg, cls) {
 function syncDownloadBtn() {
   const ok = isValidUrl(downloadUrl.value);
   downloadBtn.disabled = !ok;
-  setDownloadHint(ok ? T('Saved to Downloads, then pointed at the installer above.')
-                     : T('This does not look like a web link.'));
+  setDownloadHint(
+    ok ? T('A valid link starts a background download; SLPM will try to detect and install the file when it finishes unless another file is selected.')
+       : T('Enter a link starting with http:// or https://'));
 }
 
 downloadUrl.addEventListener('input', syncDownloadBtn);
@@ -292,7 +293,7 @@ function renderDone(d) {
   row.innerHTML = `
     <span class="download-check" aria-hidden="true">✓</span>
     <span class="download-name" tabindex="0">${esc(d.filename)}</span>
-    <span class="download-meta">${T('Download ready, installing…')}</span>
+    <span class="download-meta">${T('Download complete')}</span>
     <div class="download-actions"></div>`;
   const actions = row.querySelector('.download-actions');
   const stop = controlBtn(T('Clear'), 'close', null);
@@ -300,12 +301,8 @@ function renderDone(d) {
   actions.appendChild(stop);
   downloadRows.appendChild(row);
   if (!downloadBar.classList.contains('hidden')) downloadBar.classList.remove('hidden');
-  // In download mode the file is installed as soon as the download finishes: point
-  // the installer at the saved file, validate it is installable, then install.
-  if (pathInput && d.path) {
-    toast(T('Download ready, installing…'), d.filename, 'ok');
-    installSavedFile(d);
-  }
+  // A finished download stays visible even when another file prevents auto-install.
+  if (pathInput && d.path) installSavedFile(d);
 }
 
 function renderFailed(d) {
@@ -346,7 +343,7 @@ function installSavedFile(d) {
   // Auto-installing must not clobber a different file the user has already pointed at:
   // in that case the download is finished but the install is left to them.
   if (current && current !== d.path && current !== autoFilledPath) {
-    toast(T('Download complete'), d.filename, 'ok');
+    toast(T('Download complete; another file is already selected, so this file was not installed automatically.'), d.filename, 'ok');
     return;
   }
   autoFilledPath = d.path;
@@ -354,8 +351,10 @@ function installSavedFile(d) {
   detected = null;
   installBtn.disabled = true;
   detect().then(() => {
-    if (detected && detected.installable) runInstall();
-    else toast(T('Not installable'), T('This file could not be installed.'), 'bad');
+    if (detected && detected.installable) {
+      toast(T('Download ready, installing…'), d.filename, 'ok');
+      runInstall();
+    } else toast(T('Not installable'), T('This file could not be installed.'), 'bad');
   });
 }
 

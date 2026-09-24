@@ -9,16 +9,16 @@ A simple local web app for installing, viewing, launching, and removing Linux so
 ## Features
 
 - Simple and Advanced modes, switched from a control in the top bar next to the tabs:
-  - **Simple Mode** (the default) lists only the apps you installed yourself, in both the Installed Apps and Startup Apps tabs.
-  - **Advanced Mode** shows everything the system has — pre-installed applications, system components, packaged startup entries — where they can also be seen and removed.
+  - **Simple Mode** (the default) lists only apps that SLPM can identify as user-installed, in both the Installed Apps and Startup Apps tabs. This includes relevant apps from apt/dpkg, Snap, Flatpak, and local desktop entries.
+  - **Advanced Mode** changes Installed Apps to the installed dpkg/apt package database, including pre-installed applications and system components, and makes relevant packaged Startup Apps entries visible. It is not a unified list of every software source.
   - The Install tab is identical in both modes.
-- Telling your apps from pre-installed ones is evidence-based: SLPM reads the package managers' own records — the date each package first appears in the dpkg log, compared against the operating system's install date, the snap seed file, and Flatpak install times. Directory location and file dates are deliberately not used, because they can lie.
-- A Startup Apps tab that lists what a session starts by itself, with one-click adding and removal
-- Support for `.deb`, AppImage, Flatpak references, archives, and installer files — opening a file you have or downloading one from a link
-- Downloads run in the background with pause, continue and stop controls, a live progress bar, and an automatic install once the file is finished
+- Telling your apps from pre-installed ones is evidence-based: SLPM reads the package managers' own records — the date each dpkg package first appears in the dpkg log, the snap seed file, and the earliest modification time of the Flatpak deployment commit directories. It does not infer ownership from where a desktop entry lives or from dpkg `.list` file dates, because those signals can mislead.
+- A Startup Apps tab for viewing, adding, and turning off user-owned or packaged startup entries
+- Support for `.deb`, AppImage, `.flatpakref`, several archive formats, and `.run`/`.sh` files that can be registered without being executed — opening a local file or downloading one from a link
+- Downloads run as background jobs with pause, continue and stop controls, a live progress bar, and automatic installation after completion unless another local file is already selected
 - Automatic detection of available `apt`, Flatpak, and Snap tools
 - English and Persian interface with light and dark themes
-- Confirmation and safety checks for package operations
+- Confirmations and safety warnings for package removal; system-level operations request administrator access through `pkexec` or `sudo`
 
 ## Requirements
 

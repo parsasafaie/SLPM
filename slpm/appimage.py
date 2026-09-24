@@ -101,7 +101,7 @@ def install(path):
         name=name,
         exec_line=f'"{target}"',
         icon=icon_ref,
-        comment="Installed with SLPM",
+        comment=_t("Installed with SLPM"),
         categories=("Utility",),
         path_override=f"slpm-{slug}.desktop",
     )

@@ -252,7 +252,7 @@ def _last_error(out, err):
 def _apt_reason(out, err):
     text = f"{out}\n{err}"
     if "no authentication agent" in text.lower() or "password is required" in text.lower():
-        return "Root permission was refused, so nothing was changed."
+        return _t("Root permission was refused, so nothing was changed.")
     if "held broken packages" in text or "unmet dependencies" in text:
         return _t("Dependencies are missing or broken. Try Advanced mode and install "
                   "the missing libraries first.")

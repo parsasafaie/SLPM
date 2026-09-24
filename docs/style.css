@@ -75,7 +75,7 @@ code { background: var(--code-bg); padding: .12rem .38rem; border-radius: 5px; }
 
 /* Persian gets a slightly larger line height: the script is denser and taller. */
 :root[data-lang="fa"] body { line-height: 1.85; }
-:root[data-lang="fa"] h1 { line-height: 1.4; }
+:root[data-lang="fa"] h1 { line-height: 1.4; letter-spacing: 0; }
 :root[data-lang="fa"] h2, :root[data-lang="fa"] h3 { line-height: 1.5; letter-spacing: 0; }
 /* Latin words inside a Persian sentence must not be reordered by the bidi algorithm.
    `isolate` alone is not enough for text that starts with a neutral character: in an

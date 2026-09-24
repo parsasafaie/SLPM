@@ -556,7 +556,8 @@ def api_status():
 @app.post("/api/pick")
 def api_pick():
     """Native file chooser, when one is available. Falls back to typing a path."""
-    for tool in (["zenity", "--file-selection", "--title=Choose a file to install"],
+    for tool in (["zenity", "--file-selection",
+                  f"--title={proc.t('Choose a file to install')}"],
                  ["kdialog", "--getopenfilename", os.path.expanduser("~")]):
         if proc.which(tool[0]):
             rc, out, _ = proc.run(tool, timeout=300)

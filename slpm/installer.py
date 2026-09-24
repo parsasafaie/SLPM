@@ -207,7 +207,7 @@ def _register_launcher(launcher, root):
         icon_ref = appimage._install_icon(Path(icon_path), slug) if icon_path else None
         df = desktop.desktop_file(
             name=entry.get("Name") or name, exec_line=exec_line, icon=icon_ref,
-            comment=entry.get("Comment") or "Installed with SLPM",
+            comment=entry.get("Comment") or _t("Installed with SLPM"),
             categories=tuple(c for c in entry.get("Categories", "Utility;").split(";") if c) or ("Utility",),
             terminal=entry.get("Terminal", "").lower() == "true",
             path_override=f"slpm-{slug}.desktop",
@@ -229,7 +229,7 @@ def _register_launcher(launcher, root):
     slug = _safe_slug(name)
     df = desktop.desktop_file(
         name=Path(name).stem.replace("-", " ").replace("_", " ").title(),
-        exec_line=f'"{p}"', comment="Installed with SLPM", categories=("Utility",),
+        exec_line=f'"{p}"', comment=_t("Installed with SLPM"), categories=("Utility",),
         path_override=f"slpm-{slug}.desktop",
     )
     return {"ok": True, "kind": "archive", "title": _t("Archive"),
@@ -243,7 +243,7 @@ def _register_script(path, opts):
     slug = _safe_slug(p.stem)
     df = desktop.desktop_file(
         name=p.stem.replace("-", " ").replace("_", " ").title(),
-        exec_line=f'"{p}"', comment="Registered with SLPM", categories=("Utility",),
+        exec_line=f'"{p}"', comment=_t("Registered with SLPM"), categories=("Utility",),
         path_override=f"slpm-{slug}.desktop",
     )
     return {"ok": True, "kind": "executable", "title": _t("Installer script"),

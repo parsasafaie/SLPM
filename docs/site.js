@@ -1,4 +1,4 @@
-/* The two toggles, and the screenshots that follow them.
+/* The two toggles, the localized metadata and controls, and the screenshots that follow them.
  *
  * The page is static (GitHub Pages), so there is no server to render a language.
  * Instead both languages are in the HTML and CSS shows one of them, which means the
@@ -6,8 +6,7 @@
  *
  *   - remembering the choice in localStorage,
  *   - flipping <html dir> for Persian,
- *   - pointing every <img data-shot> at the matching screenshot, so a Persian page
- *     in dark mode shows the Persian dark screenshots,
+ *   - switching the document title, description, control labels and screenshots,
  *   - and filling in the GitHub links.
  */
 
@@ -15,6 +14,17 @@
   const root = document.documentElement;
   const KEY_THEME = 'slpm-site-theme';
   const KEY_LANG = 'slpm-site-lang';
+
+  const PAGE_META = {
+    en: {
+      title: 'SLPM — Simple Linux Package Manager',
+      description: 'Install and remove Linux software without the terminal. SLPM is a local app that runs on your own computer.',
+    },
+    fa: {
+      title: 'SLPM — مدیر بستهٔ سادهٔ لینوکس',
+      description: 'SLPM یک برنامهٔ وب محلی برای نصب، مشاهده، اجرا و حذف نرم‌افزارهای لینوکس است و روی کامپیوتر خودتان اجرا می‌شود.',
+    },
+  };
 
   /* Where the READMEs live. GitHub Pages serves only the contents of docs/, so a
      link to ../README.md would 404 — the READMEs have to be linked on github.com.
@@ -45,35 +55,59 @@
     try { localStorage.setItem(key, value); } catch (e) { /* private mode */ }
   }
 
+  function currentLang() {
+    return root.dataset.lang === 'fa' ? 'fa' : 'en';
+  }
+
+  function currentTheme() {
+    return root.dataset.theme === 'dark' ? 'dark' : 'light';
+  }
+
+  function setLabel(id, label) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.setAttribute('aria-label', label);
+    el.setAttribute('title', label);
+  }
+
+  function syncControlLabels() {
+    const lang = currentLang();
+    const theme = currentTheme();
+    setLabel('lang-toggle', lang === 'fa' ? 'تغییر زبان به انگلیسی' : 'Switch to Persian');
+    setLabel('theme-toggle', theme === 'dark'
+      ? (lang === 'fa' ? 'تغییر به تم روشن' : 'Switch to light theme')
+      : (lang === 'fa' ? 'تغییر به تم تیره' : 'Switch to dark theme'));
+  }
+
   /* --------------------------------------------------------- screenshots */
 
   // Alt text is written here rather than in the markup so it follows the language.
   const ALT = {
     install: {
-      en: 'The Install page: a switcher to choose between installing a local file or downloading and installing a link, the file drop box, and a list of the file types SLPM can install.',
-      fa: 'صفحهٔ نصب: سوییچر برای انتخاب بین نصب فایل محلی یا دانلود و نصب یک لینک، کادر رها کردن فایل و فهرستی از قالب‌هایی که SLPM می‌تواند نصب کند.',
+      en: 'The SLPM Install page: controls for choosing a local file or a download link, the file drop box, and examples of supported file types.',
+      fa: 'صفحهٔ نصب SLPM؛ گزینه‌های انتخاب فایل محلی یا دانلود از لینک، ناحیهٔ رهاکردن فایل و چند نوع فایل پشتیبانی‌شده را نشان می‌دهد.',
     },
     apps: {
-      en: 'The Installed Apps page in Simple mode, showing only the applications the user installed themselves, with the Simple/Advanced switch in the top bar.',
-      fa: 'صفحهٔ برنامه‌های نصب‌شده در حالت ساده که فقط برنامه‌های نصب‌شده توسط کاربر را نشان می‌دهد و کلید ساده/پیشرفته در نوار بالایی است.',
+      en: 'The Installed Apps page in Simple Mode, showing only the programs SLPM identifies as user-installed, with the Simple/Advanced switch in the top bar.',
+      fa: 'صفحهٔ برنامه‌های نصب‌شده در حالت ساده؛ فقط برنامه‌هایی را نشان می‌دهد که SLPM تشخیص داده است کاربر آن‌ها را نصب کرده است. کلید حالت ساده/پیشرفته در نوار بالا دیده می‌شود.',
     },
     startup: {
-      en: 'The Startup Apps page in Advanced mode, listing the programs that start with the session — the user’s own entries and the ones packages installed — with a toggle for each.',
-      fa: 'صفحهٔ برنامه‌های هنگام ورود در حالت پیشرفته که برنامه‌های راه‌اندازی‌شده با نشست را فهرست می‌کند — هم موارد کاربر و هم موارد بسته‌های سیستم — و برای هرکدام کلید خاموش/روشن دارد.',
+      en: 'The Startup Apps page in Advanced Mode, listing user and packaged startup entries with each entry’s enabled state and a control for turning entries off.',
+      fa: 'صفحهٔ برنامه‌های استارتاپ در حالت پیشرفته؛ موردهای کاربری و موردهای ارائه‌شده توسط بستهٔ سیستمی را همراه با وضعیت فعال یا غیرفعال و کنترل غیرفعال‌کردن نشان می‌دهد.',
     },
     advanced: {
-      en: 'The Installed Apps page in Advanced mode, listing every installed package including libraries and system components.',
-      fa: 'صفحهٔ برنامه‌های نصب‌شده در حالت پیشرفته، با فهرست همهٔ بسته‌های نصب‌شده از جمله کتابخانه‌ها و اجزای سیستمی.',
+      en: 'The Installed Apps page in Advanced Mode, listing installed apt/dpkg packages, including libraries, system components and essential packages.',
+      fa: 'صفحهٔ برنامه‌های نصب‌شده در حالت پیشرفته؛ بسته‌های نصب‌شدهٔ apt/dpkg، از جمله کتابخانه‌ها، اجزای سیستمی و بسته‌های حیاتی سیستم را فهرست می‌کند.',
     },
     warning: {
-      en: 'A warning dialog asking the reader to confirm before switching to Advanced mode, explaining that removing essential packages can break the system.',
-      fa: 'پنجرهٔ هشدار که قبل از رفتن به حالت پیشرفته تأیید می‌خواهد و توضیح می‌دهد حذف بسته‌های حیاتی می‌تواند سیستم را از کار بیندازد.',
+      en: 'A warning asking for confirmation before entering Advanced Mode and explaining that removing essential packages can break the operating system.',
+      fa: 'پنجرهٔ هشدار برای تأیید ورود به حالت پیشرفته؛ توضیح می‌دهد حذف بستهٔ حیاتی سیستم می‌تواند سیستم‌عامل را از کار بیندازد.',
     },
   };
 
   function syncShots() {
-    const lang = root.dataset.lang === 'fa' ? 'fa' : 'en';
-    const theme = root.dataset.theme === 'dark' ? 'dark' : 'light';
+    const lang = currentLang();
+    const theme = currentTheme();
     document.querySelectorAll('img[data-shot]').forEach(img => {
       const name = img.dataset.shot;
       // Relative path: the site is served from a subdirectory on GitHub Pages.
@@ -87,44 +121,48 @@
   /* -------------------------------------------------------------- theme */
 
   function applyTheme(theme) {
-    root.dataset.theme = theme;
+    root.dataset.theme = theme === 'dark' ? 'dark' : 'light';
     const meta = document.querySelector('meta[name="color-scheme"]');
-    if (meta) meta.content = theme;
+    if (meta) meta.content = currentTheme();
     const btn = document.getElementById('theme-toggle');
-    if (btn) {
-      btn.setAttribute('aria-pressed', theme === 'dark' ? 'true' : 'false');
-      btn.setAttribute('title', theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme');
-    }
+    if (btn) btn.setAttribute('aria-pressed', currentTheme() === 'dark' ? 'true' : 'false');
+    syncControlLabels();
     syncShots();
   }
 
   /* ----------------------------------------------------------- language */
 
   function applyLang(lang) {
-    root.dataset.lang = lang;
-    root.lang = lang;
-    root.dir = lang === 'fa' ? 'rtl' : 'ltr';
-    const btn = document.getElementById('lang-toggle');
-    if (btn) btn.setAttribute('title', lang === 'fa' ? 'Switch to English' : 'تغییر به فارسی');
+    const next = lang === 'fa' ? 'fa' : 'en';
+    root.dataset.lang = next;
+    root.lang = next;
+    root.dir = next === 'fa' ? 'rtl' : 'ltr';
+
+    const meta = PAGE_META[next];
+    document.title = meta.title;
+    const description = document.getElementById('site-description');
+    if (description) description.setAttribute('content', meta.description);
+
+    syncControlLabels();
     syncShots();
   }
 
   /* -------------------------------------------------------------- wiring */
 
-  applyTheme(root.dataset.theme === 'dark' ? 'dark' : 'light');
-  applyLang(root.dataset.lang === 'fa' ? 'fa' : 'en');
+  applyTheme(currentTheme());
+  applyLang(currentLang());
   fillRepoLinks();
 
   const themeBtn = document.getElementById('theme-toggle');
   if (themeBtn) themeBtn.addEventListener('click', () => {
-    const next = root.dataset.theme === 'dark' ? 'light' : 'dark';
+    const next = currentTheme() === 'dark' ? 'light' : 'dark';
     applyTheme(next);
     store(KEY_THEME, next);
   });
 
   const langBtn = document.getElementById('lang-toggle');
   if (langBtn) langBtn.addEventListener('click', () => {
-    const next = root.dataset.lang === 'fa' ? 'en' : 'fa';
+    const next = currentLang() === 'fa' ? 'en' : 'fa';
     applyLang(next);
     store(KEY_LANG, next);
   });

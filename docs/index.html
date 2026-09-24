@@ -3,9 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="color-scheme" content="light">
-<title>SLPM — Simple Linux Package Manager</title>
-<meta name="description" content="Install and remove Linux software without the terminal. A small app that runs on your own computer.">
+<meta name="color-scheme" content="light" id="site-color-scheme">
+<title id="site-title">SLPM — Simple Linux Package Manager</title>
+<meta name="description" id="site-description" content="Install and remove Linux software without the terminal. SLPM is a local app that runs on your own computer.">
 <link rel="stylesheet" href="style.css">
 <script>
 /* Read the saved choice before the first paint, so a dark page never flashes white.
@@ -35,15 +35,15 @@
     <span class="brand-text">
       <strong>SLPM</strong>
       <span class="t-en">Simple Linux Package Manager</span>
-      <span class="t-fa">مدیر سادهٔ بسته‌های لینوکس</span>
+      <span class="t-fa">مدیر بستهٔ سادهٔ لینوکس</span>
     </span>
   </a>
   <div class="bar-actions">
-    <button type="button" id="lang-toggle" class="btn-icon" aria-label="Switch language">
+    <button type="button" id="lang-toggle" class="btn-icon" aria-label="Switch to Persian" title="Switch to Persian">
       <span class="t-en">فارسی</span>
       <span class="t-fa">English</span>
     </button>
-    <button type="button" id="theme-toggle" class="btn-icon" aria-label="Switch theme">
+    <button type="button" id="theme-toggle" class="btn-icon" aria-label="Switch to dark theme" title="Switch to dark theme">
       <svg class="i-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8.5 8.5 0 019.5 4a7 7 0 108.5 10.5z"/></svg>
       <svg class="i-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.2M12 19.3v2.2M4.2 12H2M22 12h-2.2M5.6 5.6L4 4M20 20l-1.6-1.6M18.4 5.6L20 4M4 20l1.6-1.6"/></svg>
     </button>
@@ -61,23 +61,23 @@
       </span>
       <h1>
         <span class="t-en">Install Linux software<br>without the terminal</span>
-        <span class="t-fa">نرم‌افزارهای لینوکس را<br>بدون ترمینال نصب کنید</span>
+        <span class="t-fa">برنامه‌های لینوکس را<br>بدون ترمینال نصب کنید</span>
       </h1>
       <p class="lead">
-        <span class="t-en">A small app that runs on your own computer. Point it at a file you
-          downloaded, or pick something already installed — it works out the rest.</span>
-        <span class="t-fa">یک برنامهٔ کوچک که روی کامپیوتر خودتان اجرا می‌شود. فایلی را که
-          دانلود کرده‌اید به آن بدهید، یا از نصب‌شده‌ها انتخاب کنید — بقیه‌اش را خودش
-          انجام می‌دهد.</span>
+        <span class="t-en">SLPM is a local app that runs on your own computer. Give it a local
+          installer or a download link, and it recognises the file and installs it the right way.</span>
+        <span class="t-fa">SLPM یک برنامهٔ محلی است که روی کامپیوتر خودتان اجرا می‌شود. فایلی را که
+          می‌خواهید نصب کنید یا لینک دانلودش را به آن می‌دهید تا نوع فایل را تشخیص دهد و با روش
+          مناسب نصبش کند.</span>
       </p>
       <div class="cta">
         <a class="btn btn-primary" href="#install">
           <span class="t-en">Get started</span>
-          <span class="t-fa">شروع کار</span>
+          <span class="t-fa">شروع کنید</span>
         </a>
         <a class="btn btn-ghost" data-repo="" target="_blank" rel="noopener">
           <span class="t-en">View on GitHub</span>
-          <span class="t-fa">مشاهده در گیت‌هاب</span>
+          <span class="t-fa">مشاهده در GitHub</span>
         </a>
       </div>
     </div>
@@ -91,16 +91,17 @@
         <span class="t-fa">SLPM چیست؟</span>
       </h2>
       <p>
-        <span class="t-en">SLPM opens in your web browser. You do not need to type commands or
-          learn <span class="mono">apt</span>, <span class="mono">snap</span> and
-          <span class="mono">flatpak</span>. It shows the programs on your computer with the
-          same names and icons you see in your applications menu, and you install or remove
-          them with a click.</span>
-        <span class="t-fa">SLPM در مرورگر شما باز می‌شود. لازم نیست دستور بنویسید یا
-          <span class="mono">apt</span> و <span class="mono">snap</span> و
-          <span class="mono">flatpak</span> را یاد بگیرید. برنامه‌های روی کامپیوترتان را با
-          همان نام و آیکونی که در منوی برنامه‌ها می‌بینید نشان می‌دهد، و با یک کلیک نصب یا
-          حذفشان می‌کنید.</span>
+        <span class="t-en">SLPM opens in your web browser and works on the same computer. You do not
+          need to type <span class="mono">apt</span>, <span class="mono">snap</span>, or
+          <span class="mono">flatpak</span> commands to install a file. In Simple Mode, Installed Apps
+          uses the names and icons from your applications menu and shows the apps you installed;
+          Advanced Mode opens the installed dpkg/apt package database.</span>
+        <span class="t-fa">SLPM در مرورگر اجرا می‌شود و روی همان کامپیوتر کار می‌کند. برای نصب فایل
+          لازم نیست خودتان دستورهای <span class="mono">apt</span>، <span class="mono">snap</span> یا
+          <span class="mono">flatpak</span> را اجرا کنید. در حالت ساده، تب «برنامه‌های نصب‌شده»
+          نام و نماد برنامه‌ها را همان‌طور که در منوی برنامه‌ها می‌بینید نشان می‌دهد؛ در این حالت
+          فقط برنامه‌هایی دیده می‌شوند که خودتان نصب کرده‌اید. حالت پیشرفته فهرست بسته‌های
+          نصب‌شدهٔ dpkg/apt را باز می‌کند.</span>
       </p>
     </div>
   </section>
@@ -108,41 +109,44 @@
   <!-- ---------------------------------------------------------- install -->
   <section class="wrap" id="install">
     <h2 class="section-title">
-      <span class="t-en">Install in three steps</span>
-      <span class="t-fa">راه‌اندازی در چند مرحله</span>
+      <span class="t-en">Set up SLPM</span>
+      <span class="t-fa">راه‌اندازی SLPM</span>
     </h2>
 
-    <p class="after"><span class="t-en">For setup, simply run the following commands in your terminal.</span><span class="t-fa">برای راه‌اندازی، کافی است دستورات زیر را در ترمینال خود اجرا کنید.</span></p>
-    <div class="terminal"><div class="terminal-bar"><span></span><span></span><span></span></div><pre><code><span class="c-dim">$</span> sudo apt update && sudo apt install -y git python3 python3-venv  # <span class="t-en">Install Git, Python and venv</span><span class="t-fa">نصب Git، پایتون و محیط مجازی</span>
-<span class="c-dim">$</span> git clone https://github.com/parsasafaie/SLPM.git  # <span class="t-en">Clone the project</span><span class="t-fa">دریافت پروژه</span>
-<span class="c-dim">$</span> cd SLPM  # <span class="t-en">Enter the project folder</span><span class="t-fa">ورود به پوشه پروژه</span>
-<span class="c-dim">$</span> python3 -m venv .venv  # <span class="t-en">Create a virtual environment</span><span class="t-fa">ساخت محیط مجازی</span>
-<span class="c-dim">$</span> source .venv/bin/activate  # <span class="t-en">Activate it</span><span class="t-fa">فعال‌سازی محیط مجازی</span>
-<span class="c-dim">$</span> pip install -r requirements.txt  # <span class="t-en">Install dependencies</span><span class="t-fa">نصب وابستگی‌ها</span>
-<span class="c-dim">$</span> python app.py  # <span class="t-en">Start SLPM</span><span class="t-fa">اجرای SLPM</span></code></pre></div>
+    <p class="after"><span class="t-en">Run these commands in a terminal to set up SLPM.</span><span class="t-fa">برای راه‌اندازی SLPM، دستورهای زیر را در ترمینال اجرا کنید.</span></p>
+    <div class="terminal"><div class="terminal-bar"><span></span><span></span><span></span></div><pre><code><span class="c-dim">$</span> sudo apt update && sudo apt install -y git python3 python3-venv  # Install Git, Python and venv
+<span class="c-dim">$</span> git clone https://github.com/parsasafaie/SLPM.git  # Clone the project
+<span class="c-dim">$</span> cd SLPM  # Enter the project folder
+<span class="c-dim">$</span> python3 -m venv .venv  # Create a virtual environment
+<span class="c-dim">$</span> source .venv/bin/activate  # Activate it
+<span class="c-dim">$</span> pip install -r requirements.txt  # Install dependencies
+<span class="c-dim">$</span> python app.py  # Start SLPM</code></pre></div>
     <p class="after"><span class="t-en">Then open <span class="mono">http://127.0.0.1:8686</span> in your browser.</span><span class="t-fa">سپس <span class="mono">http://127.0.0.1:8686</span> را در مرورگر باز کنید.</span></p>
+  </section>
 
   <!-- --------------------------------------------------------- features -->
   <section class="wrap" id="features">
     <h2 class="section-title">
       <span class="t-en">What it does</span>
-      <span class="t-fa">چه کارهایی می‌کند</span>
+      <span class="t-fa">امکانات SLPM</span>
     </h2>
 
     <article class="feature">
       <div class="feature-text">
         <h3>
-          <span class="t-en">Install a file, or download and install one</span>
-          <span class="t-fa">نصب فایل، یا دانلود و نصب آن</span>
+          <span class="t-en">Install a local file, or download and install one</span>
+          <span class="t-fa">نصب فایل محلی یا دانلود و نصب خودکار</span>
         </h3>
         <p>
-          <span class="t-en">Switch between a file you already have and a link to download. Point it
-            at either and SLPM recognises what it is and installs it the right way — and once a
-            download finishes, it installs the file for you. You do not need to know which of the
-            four formats you have.</span>
-          <span class="t-fa">بین نصب فایلی که از قبل دارید و دانلود کردنش از یک لینک، انتخاب کنید. SLPM
-            هر کدام را دریافت می‌دهد، نوعش را می‌فهمد و به روش درست نصبش می‌کند — و وقتی تمام شد،
-            خودش نصبش می‌کند — لازم نیست بدانید با کدام قالب دارید.</span>
+          <span class="t-en">Choose a file already on this computer or paste a download link. SLPM
+            recognises the supported file type and uses the appropriate installation or registration method. Downloads
+            keep running in the background, with progress and pause, continue, and stop controls. A
+            finished download is installed automatically unless another file is already selected.</span>
+          <span class="t-fa">فایلی را که از قبل روی این کامپیوتر دارید انتخاب کنید یا لینک دانلود
+            را وارد کنید. SLPM نوع فایل پشتیبانی‌شده را تشخیص می‌دهد و روش مناسب را برای نصب یا ثبت آن به کار می‌گیرد.
+            دانلود در پس‌زمینه انجام می‌شود و پیشرفت آن را همراه با کنترل‌های توقف موقت، ادامه و
+            لغو دانلود می‌بینید. پس از پایان دانلود، فایل خودکار نصب می‌شود؛ مگر اینکه هم‌زمان فایل
+            دیگری برای نصب انتخاب کرده باشید.</span>
         </p>
         <ul class="tags">
           <li>.deb</li><li>.AppImage</li><li>.flatpakref</li><li>.tar.gz / .zip</li>
@@ -157,14 +161,16 @@
       <div class="feature-text">
         <h3>
           <span class="t-en">The apps you installed, at a glance</span>
-          <span class="t-fa">برنامه‌هایی که خودتان نصب کرده‌اید، یک‌جور</span>
+          <span class="t-fa">برنامه‌هایی که خودتان نصب کرده‌اید</span>
         </h3>
         <p>
-          <span class="t-en">Simple Mode lists only the programs you put on this computer yourself —
+          <span class="t-en">Simple Mode shows only programs that the package managers' records identify
+            as installed after the operating system, along with relevant local entries. It uses the
             same names and icons as your applications menu. Search the list, launch a program, read
             its details, or remove it.</span>
-          <span class="t-fa">حالت ساده فقط برنامه‌هایی را فهرست می‌کند که خودتان روی این کامپیوتر گذاشته‌اید —
-            با همان نام و آیکون منوی برنامه‌ها. فهرست را جست‌وجو کنید، برنامه‌ای را اجرا کنید،
+          <span class="t-fa">حالت ساده فقط برنامه‌هایی را نشان می‌دهد که در سابقهٔ ابزارهای بسته،
+            نصبشان پس از نصب سیستم‌عامل ثبت شده است، به‌همراه میان‌برهای محلی. نام و نماد هر
+            برنامه از منوی برنامه‌ها گرفته می‌شود. در فهرست جست‌وجو کنید، برنامه را اجرا کنید،
             جزئیاتش را ببینید یا حذفش کنید.</span>
         </p>
       </div>
@@ -176,18 +182,21 @@
     <article class="feature">
       <div class="feature-text">
         <h3>
-          <span class="t-en">What starts with your session</span>
-          <span class="t-fa">چه برنامه‌هایی با نشست راه‌اندازی می‌شوند</span>
+          <span class="t-en">Startup Apps, under your control</span>
+          <span class="t-fa">برنامه‌های استارتاپ، زیر نظر شما</span>
         </h3>
         <p>
-          <span class="t-en">The Startup Apps tab lists the programs your computer starts by itself —
-            the ones packages installed and the ones you added. In Simple Mode you manage your own
-            entries; Advanced Mode shows the packaged ones too, where each can be switched off
-            without touching a system file.</span>
-          <span class="t-fa">تب «برنامه‌های هنگام ورود» برنامه‌هایی را فهرست می‌کند که کامپیوتر به‌تنهایی
-            اجرا می‌کند — هم آنچه بسته‌ها نصب کرده‌اند و هم آنچه شما افزوده‌اید. در حالت ساده موارد
-            خودتان را مدیریت می‌کنید؛ حالت پیشرفته موارد بسته‌های سیستم را هم نشان می‌دهد و هرکدام
-            را می‌توان بدون دست‌زدن به فایل‌های سیستمی خاموش کرد.</span>
+          <span class="t-en">The Startup Apps tab lists the entries a desktop session can start:
+            those supplied by packages and the desktop environment, plus entries you added. Simple
+            Mode shows your own entries. Advanced Mode also shows packaged entries, each with its
+            enabled state. Turning off a packaged entry creates a user override instead of changing a
+            system file.</span>
+          <span class="t-fa">تب «برنامه‌های استارتاپ» موردهایی را نشان می‌دهد که نشست دسکتاپ
+            می‌تواند اجرا کند: موردهای ارائه‌شده توسط بسته‌ها و محیط دسکتاپ، به‌همراه موردهایی که
+            خودتان اضافه کرده‌اید. حالت ساده فقط موردهای کاربری را نشان می‌دهد. حالت پیشرفته
+            موردهای ارائه‌شده توسط بسته‌های سیستمی و وضعیت فعال یا غیرفعال هرکدام را هم نشان
+            می‌دهد. برای غیرفعال‌کردن مورد بستهٔ سیستمی، SLPM به‌جای تغییر فایل سیستمی یک فایل
+            کاربری هم‌نام می‌سازد.</span>
         </p>
       </div>
       <figure class="shot">
@@ -198,18 +207,20 @@
     <article class="feature flip">
       <div class="feature-text">
         <h3>
-          <span class="t-en">Advanced mode, when you want more</span>
-          <span class="t-fa">حالت پیشرفته، برای جزئیات بیشتر</span>
+          <span class="t-en">Advanced Mode for apt/dpkg packages</span>
+          <span class="t-fa">حالت پیشرفته برای بسته‌های apt/dpkg</span>
         </h3>
         <p>
-          <span class="t-en">A switch in the top bar, next to the tabs, moves the whole app between the
-            two views. In Advanced, Installed Apps lists everything the system has — libraries,
-            drivers and system components included — and Startup Apps adds the entries packages
-            installed. One click back and Simple is where it was.</span>
-          <span class="t-fa">کلید کوچکی در نوار بالا، کنار تب‌ها، کل برنامه را بین دو حالت جابه‌جا می‌کند.
-            در حالت پیشرفته «برنامه‌های نصب‌شده» همهٔ چیزهایی را که سیستم دارد فهرست می‌کند — از
-            کتابخانه‌ها و درایورها تا اجزای سیستمی — و «برنامه‌های هنگام ورود» موارد بسته‌های
-            سیستم را هم می‌افزاید. با یک کلیک، حالت ساده به‌جای خود برمی‌گردد.</span>
+          <span class="t-en">In Advanced Mode, Installed Apps switches to the installed dpkg/apt
+            package database. It can include pre-installed applications, libraries, drivers, system
+            components, and essential packages. Startup Apps also includes packaged startup entries.
+            This is not a unified list of every software source, and the Install tab is the same in
+            both modes.</span>
+          <span class="t-fa">در حالت پیشرفته، تب «برنامه‌های نصب‌شده» به فهرست بسته‌های نصب‌شدهٔ
+            dpkg/apt تغییر می‌کند. در این فهرست ممکن است برنامه‌های از پیش نصب‌شده، کتابخانه‌ها،
+            درایورها، اجزای سیستمی و بسته‌های حیاتی سیستم باشند. تب «برنامه‌های استارتاپ» نیز موردهای
+            ارائه‌شده توسط بسته‌های سیستمی را نشان می‌دهد. این حالت فهرستی یکپارچه از همهٔ منابع نرم‌افزاری نیست
+            و تب «نصب» در هر دو حالت یکسان است.</span>
         </p>
       </div>
       <figure class="shot">
@@ -221,15 +232,17 @@
       <div class="feature-text">
         <h3>
           <span class="t-en">A warning before anything risky</span>
-          <span class="t-fa">هشدار پیش از کارهای حساس</span>
+          <span class="t-fa">هشدار پیش از عملیات پرخطر</span>
         </h3>
         <p>
-          <span class="t-en">On Linux, removing the wrong thing can break the computer. SLPM
-            tells you plainly when a package is part of the system, and asks you to confirm
-            before it touches anything important.</span>
-          <span class="t-fa">در لینوکس، حذف یک بستهٔ اشتباه ممکن است سیستم را از کار بیندازد.
-            SLPM صریح می‌گوید کدام بسته جزء سیستم است و قبل از دست‌زدن به چیزهای مهم، از شما
-            تأیید می‌گیرد.</span>
+          <span class="t-en">On Linux, removing the wrong package can stop programs from working or
+            prevent the computer from starting. SLPM marks system components and essential packages,
+            explains the risk, and asks you to confirm before removal. There is no undo, and SLPM
+            does not create backups.</span>
+          <span class="t-fa">در لینوکس، حذف بستهٔ اشتباه می‌تواند برنامه‌ها را از کار بیندازد یا
+            مانع روشن‌شدن کامپیوتر شود. SLPM جزء سیستمی یا بستهٔ حیاتی سیستم را مشخص می‌کند،
+            خطر را توضیح می‌دهد و پیش از حذف از شما تأیید می‌گیرد. SLPM نمی‌تواند تغییرات را
+            بازگرداند و نسخهٔ پشتیبان نمی‌سازد.</span>
         </p>
       </div>
       <figure class="shot">
@@ -248,16 +261,16 @@
         </h2>
         <ul class="ticks">
           <li>
-            <span class="t-en">Linux with a desktop (developed on Ubuntu 26.04)</span>
-            <span class="t-fa">لینوکس با محیط گرافیکی (توسعه و آزمایش روی Ubuntu)</span>
+            <span class="t-en">A Linux desktop environment (developed on Ubuntu 26.04)</span>
+            <span class="t-fa">لینوکس با محیط دسکتاپ (توسعه روی Ubuntu 26.04)</span>
           </li>
           <li>
             <span class="t-en">Python 3.9 or newer</span>
-            <span class="t-fa">پایتون ۳.۹ یا بالاتر</span>
+            <span class="t-fa">Python 3.9 یا جدیدتر</span>
           </li>
           <li>
-            <span class="t-en">Your admin password, for installing and removing</span>
-            <span class="t-fa">رمز عبور مدیر سیستم برای نصب و حذف</span>
+            <span class="t-en">Administrator access when a system operation needs it</span>
+            <span class="t-fa">دسترسی مدیر برای عملیات سطح سیستم</span>
           </li>
         </ul>
       </div>
@@ -265,20 +278,20 @@
       <div class="card">
         <h2>
           <span class="t-en">How it stays safe</span>
-          <span class="t-fa">چطور از سیستم محافظت می‌کند</span>
+          <span class="t-fa">ایمنی SLPM</span>
         </h2>
         <ul class="ticks">
           <li>
-            <span class="t-en">Runs only on your computer, not on the internet</span>
-            <span class="t-fa">فقط روی کامپیوتر خودتان اجرا می‌شود و به اینترنت وابسته نیست</span>
+            <span class="t-en">Runs locally by default; do not expose the server to the network</span>
+            <span class="t-fa">به‌صورت پیش‌فرض محلی اجرا می‌شود؛ سرور را در دسترس شبکه قرار ندهید</span>
           </li>
           <li>
-            <span class="t-en">Your password is never stored anywhere</span>
-            <span class="t-fa">رمز عبور شما هیچ‌وقت ذخیره نمی‌شود</span>
+            <span class="t-en">Your administrator password is never stored by SLPM</span>
+            <span class="t-fa">SLPM رمز مدیر شما را ذخیره نمی‌کند</span>
           </li>
           <li>
-            <span class="t-en">Every command it runs is checked against a fixed list</span>
-            <span class="t-fa">هر دستور پیش از اجرا با یک فهرست مجاز بررسی می‌شود</span>
+            <span class="t-en">Package commands use argument arrays rather than shell strings</span>
+            <span class="t-fa">دستورهای مدیریت بسته با آرایهٔ آرگومان اجرا می‌شوند، نه با رشتهٔ shell</span>
           </li>
         </ul>
       </div>
@@ -290,13 +303,13 @@
     <div class="card more">
       <h2>
         <span class="t-en">Want the technical details?</span>
-        <span class="t-fa">جزئیات فنی لازم دارید؟</span>
+        <span class="t-fa">جزئیات فنی می‌خواهید؟</span>
       </h2>
       <p>
-        <span class="t-en">This page is the short version. The READMEs cover the API, the safety
-          model, how privileged commands work and how to troubleshoot.</span>
-        <span class="t-fa">این صفحه خلاصه‌ای کوتاه است. برای API، جزئیات ایمنی و نحوهٔ کار برنامه،
-          دستورهای نیازمند دسترسی ریشه و رفع اشکال را پوشش می‌دهند.</span>
+        <span class="t-en">The README covers installation and everyday behaviour. The architecture
+          document explains the main components, download jobs, mode boundaries, and security model.</span>
+        <span class="t-fa">README روش نصب و رفتار معمول برنامه را توضیح می‌دهد. سند معماری هم اجزای
+          اصلی، نحوهٔ مدیریت دانلودها، مرز حالت‌ها و مدل امنیتی را دقیق‌تر توضیح می‌دهد.</span>
       </p>
       <div class="cta">
         <a class="btn btn-ghost lang-en-only" data-repo="ARCHITECTURE.md" target="_blank" rel="noopener">
@@ -316,7 +329,7 @@
 <footer class="foot">
   <p>
     <span class="t-en">SLPM — a local web app for installing and removing Linux software.</span>
-    <span class="t-fa">SLPM — یک برنامهٔ وب محلی برای نصب و حذف نرم‌افزارهای لینوکس.</span>
+    <span class="t-fa">SLPM — برنامهٔ وب محلی برای نصب و حذف نرم‌افزارهای لینوکس.</span>
   </p>
 </footer>
 

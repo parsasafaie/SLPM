@@ -4,8 +4,8 @@
 {% block content %}
 <section class="hero row-between">
   <div>
-    <h2>{{ t('Startup apps') }}</h2>
-    <p class="muted" id="subtitle">{{ t('Programs that start by themselves when you log in.') }}</p>
+    <h2>{{ t('Startup Apps') }}</h2>
+    <p class="muted" id="subtitle">{{ t('Startup apps that start when you log in.') }}</p>
   </div>
   <button class="btn btn-primary" id="add">{{ t('Add startup app') }}</button>
 </section>
@@ -29,9 +29,9 @@
 <div id="list" class="list"></div>
 <div id="empty" class="empty hidden">
   <h3>{{ t('Nothing to show') }}</h3>
-  <p class="muted" id="empty-note">{{ t('No startup programs matched.') }}</p>
+  <p class="muted" id="empty-note">{{ t('No startup apps matched.') }}</p>
 </div>
-<div id="loader" class="loader hidden"><div class="spinner"></div><span>{{ t('Reading startup programs…') }}</span></div>
+<div id="loader" class="loader hidden"><div class="spinner"></div><span>{{ t('Reading startup apps…') }}</span></div>
 {% endblock %}
 
 {% block scripts %}<script src="{{ url_for('static', filename='js/startup.js') }}"></script>{% endblock %}

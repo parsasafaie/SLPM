@@ -1,4 +1,4 @@
-/* Installed Apps: Simple mode (your own apps) and Advanced mode (every package).
+/* Installed Apps: Simple mode (your own apps) and Advanced mode (apt/dpkg packages).
  *
  * The Simple/Advanced switch itself lives in the tab row (base.html) and is owned by
  * prefs.js, because the choice applies to the Startup tab too. What is here is the
@@ -36,10 +36,9 @@ function applyModeChrome() {
   const advanced = state.mode === 'advanced';
   $('#cleanup').classList.toggle('hidden', !advanced);
   $('#subtitle').textContent = advanced
-    ? T('Every installed package, including system components.')
-    : T('Only the apps you installed yourself. Switch to Advanced to see everything '
-        + 'the system came with.');
-  // The source filter is about package managers, which only the advanced list reports.
+    ? T('Installed apt/dpkg packages, including system components.')
+    : T('Only the apps you installed yourself. Switch to Advanced Mode to see apt/dpkg packages.');
+  // The source filter is shown only with the apt/dpkg package list.
   $('#filter').classList.toggle('hidden', !advanced);
 }
 
@@ -51,7 +50,7 @@ function applyModeChrome() {
 async function load() {
   setLoading(true, state.mode === 'simple'
     ? T('Reading your installed apps…')
-    : T('Reading the package database…'));
+    : T('Reading apt/dpkg packages…'));
   if (state.mode === 'simple') {
     const r = await api('/api/apps');
     setLoading(false);
@@ -60,13 +59,14 @@ async function load() {
   } else {
     const r = await api('/api/packages');
     setLoading(false);
-    if (!r.ok) return toast(T('Could not list packages'), r.message, 'bad');
+    if (!r.ok) return toast(T('Could not list apt/dpkg packages'), r.message, 'bad');
     state.items = (r.packages || []).map(p => ({
       id: `apt:${p.name}`, name: p.name, summary: p.summary, version: p.version,
       size: p.size, manager: 'apt', package: p.name, section: p.section,
       essential: p.essential, dangerous: p.dangerous, removable: true, icon_url: '',
       can_launch: false,
-    }));  }
+    }));
+  }
   render();
 }
 
@@ -79,7 +79,7 @@ function render() {
       (i.summary || '').toLowerCase().includes(q) ||
       (i.package || '').toLowerCase().includes(q));
   }
-  // The source filter belongs to the advanced list, where every manager shows up.
+  // The source filter belongs to the advanced apt/dpkg list.
   if (state.mode === 'advanced' && state.source !== 'all') {
     items = items.filter(i => i.manager === state.source);
   }
@@ -90,9 +90,8 @@ function render() {
     $('#empty-note').textContent = state.query
       ? T('Nothing matched “{q}”.', { q: state.query })
       : (state.mode === 'simple'
-          ? T('You have not installed any apps yourself yet. Switch to Advanced to see '
-              + 'everything the system came with.')
-          : T('No applications matched.'));
+          ? T('No apps installed by you yet. Switch to Advanced Mode to see apt/dpkg packages.')
+          : T('No apt/dpkg packages matched.'));
     return;
   }
   empty.classList.add('hidden');
@@ -113,12 +112,11 @@ function row(item) {
   const icon = item.icon_url
     ? `<img src="${esc(item.icon_url)}" alt="" loading="lazy">`
     : `<span class="letter">${esc((item.name || '?').trim().charAt(0).toUpperCase())}</span>`;
-  // "system" now means what it says: removal is impossible (dpkg Essential). Packages
-  // that merely belong to the OS get a softer "os" badge - they are still removable, so
-  // they must not look protected. Both are advanced-view concepts.
+  // Essential packages get the strongest badge. Packages that merely belong to the OS
+  // are still removable, so they must not look protected. Both are advanced-view concepts.
   const badges = [
     state.mode === 'advanced' && item.essential
-      ? `<span class="badge essential">${esc(T('system'))}</span>` : '',
+      ? `<span class="badge essential">${esc(T('essential'))}</span>` : '',
     state.mode === 'advanced' && !item.essential && item.dangerous
       ? `<span class="badge">${esc(T('os'))}</span>` : '',
     item.manager && item.manager !== 'apt' ? `<span class="badge">${esc(item.manager)}</span>` : '',
@@ -150,8 +148,8 @@ function row(item) {
     }
   } else {
     actions.appendChild(button(T('Details'), () => pkgDetails(item.package, item.essential)));
-    // Advanced Mode removes anything, Essential packages included. The typed package
-    // name in the confirmation dialog is the guard, not a missing button.
+    // Advanced Mode can remove any listed apt/dpkg package, including Essential ones.
+    // The typed package name in the confirmation dialog is the guard.
     actions.appendChild(button(T('Remove'), () =>
       removePackage(item.package, item.dangerous, item.essential), 'btn-danger'));
   }
@@ -203,22 +201,24 @@ async function details(item) {
 async function pkgDetails(name, essential) {
   modal({
     title: name,
-    html: `<p class="muted">${esc(T('Reading the package database…'))}</p>`,
+    html: `<p class="muted">${esc(T('Reading apt/dpkg packages…'))}</p>`,
     buttons: [{ label: T('Close'), kind: 'ghost', onClick: closeModal }]
   });
   const r = await api(`/api/packages/${encodeURIComponent(name)}`);
   if (!r.ok) { $('#modal .body').innerHTML = `<p>${esc(r.message)}</p>`; return; }
   const p = r.package;
-  // Two different warnings: Essential packages cannot be removed at all, while other
-  // system components can - but may break the machine.
+  // Essential packages can be removed only in Advanced Mode, after typing the package
+  // name; apt then receives --allow-remove-essential. Other system components can also
+  // be removed, but may break the machine.
   const warn = essential
-    ? `<div class="warn-box danger-box">${esc(T('This package is essential to the '
-        + 'system and cannot be removed.'))}</div>`
+    ? `<div class="warn-box danger-box">${esc(T('This package is essential to the system. It can be removed in Advanced Mode only after you type its name to confirm; SLPM will use --allow-remove-essential. Removing it can make the computer unable to start and permanently break package management.'))}</div>`
     : p.dangerous
       ? `<div class="warn-box danger-box">${esc(T('This is a system component. '
           + 'Removing it can stop programs from working or prevent the computer from '
           + 'starting.'))}</div>`
       : '';
+  const depends = p.Depends && p.Depends.toLowerCase() !== 'none'
+    ? p.Depends : T('none');
   $('#modal .body').innerHTML = warn +
     `<p>${esc((p.Description || '').split('\n')[0])}</p>` +
     kv({
@@ -229,7 +229,7 @@ async function pkgDetails(name, essential) {
       [T('Status')]: statusLabel(p.Status),
     }) +
     `<h3 class="small" style="margin-top:1rem">${esc(T('Dependencies'))}</h3>
-     <p class="small muted">${esc((p.Depends || 'none').slice(0, 400))}</p>`;
+     <p class="small muted">${esc(depends.slice(0, 400))}</p>`;
 }
 
 /* dpkg reports Status as a three-word phrase ("install ok installed",
@@ -358,7 +358,7 @@ $('#search').addEventListener('input', e => {
 });
 $('#filter').addEventListener('change', e => {
   state.source = e.target.value;
-  if (state.mode === 'simple') state.items.length ? render() : load();
+  if (state.mode === 'simple' && !state.items.length) load();
   else render();
 });
 $('#refresh').onclick = load;

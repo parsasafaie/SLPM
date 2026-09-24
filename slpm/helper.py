@@ -103,11 +103,14 @@ def spawn(sock_path, log_path):
             argv = ["pkexec", *argv]
         elif proc.which("sudo"):
             argv = ["sudo", *argv]
-            env_note = " (password prompt may appear in the terminal that started SLPM)"
+            env_note = proc.t(
+                " (password prompt may appear in the terminal that started SLPM)")
         else:
-            return False, "Neither pkexec nor sudo is available, so privileged actions cannot run."
+            return False, proc.t(
+                "Neither pkexec nor sudo is available, so privileged actions cannot run.")
 
-    kwargs = {"env": {**os.environ, "PYTHONPATH": _project_root()}}
+    kwargs = {"env": {**os.environ, "PYTHONPATH": _project_root(),
+                      "SLPM_LANG": proc.lang()}}
     try:
         import subprocess
 
@@ -115,14 +118,15 @@ def spawn(sock_path, log_path):
             subprocess.Popen(argv, stdout=log, stderr=log, stdin=subprocess.DEVNULL,
                              **kwargs)
     except OSError as exc:
-        return False, f"Could not start the privileged helper: {exc}"
+        return False, proc.t("Could not start the privileged helper: {exc}", exc=exc)
 
     for _ in range(60):  # up to ~30s: the user may be typing a password
         time.sleep(0.5)
         if not _stale(sock_path):
-            return True, "Privileged helper is running."
-    return False, ("Root permission was not granted. SLPM asked for it with pkexec "
-                   "and the request was dismissed or denied." + env_note)
+            return True, proc.t("Privileged helper is running.")
+    return False, proc.t(
+        "Root permission was not granted. SLPM asked for it with pkexec and the request "
+        "was dismissed or denied.") + env_note
 
 
 def _project_root():
@@ -133,6 +137,8 @@ def _project_root():
 
 def serve(sock_path):
     sock_path = Path(sock_path)
+    helper_lang = os.environ.get("SLPM_LANG", "en")
+    proc.set_lang(helper_lang)
     sock_path.parent.mkdir(parents=True, exist_ok=True)
     try:
         sock_path.unlink()
@@ -160,6 +166,7 @@ def serve(sock_path):
 
     def handle(conn):
         nonlocal last
+        proc.set_lang(helper_lang)
         last = time.time()
         try:
             # A single recv() can return a partial request; read until the client's
@@ -178,7 +185,8 @@ def serve(sock_path):
             req = json.loads(b"".join(chunks) or b"{}")
             argv = req.get("argv") or []
             if not _allowed(argv):
-                payload = {"rc": 126, "out": "", "err": f"refused by helper: {argv}"}
+                payload = {"rc": 126, "out": "", "err": proc.t(
+                    "Refused by helper: {argv}", argv=argv)}
             else:
                 rc, out, err = proc.run(argv, timeout=900)
                 payload = {"rc": rc, "out": out[-200_000:], "err": err[-200_000:]}

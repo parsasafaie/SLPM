@@ -33,11 +33,11 @@
   </div>
 </div>
 
-<!-- Download a link, then install it automatically when the download finishes. -->
+<!-- Download a link, then try to install it when the download finishes unless another file is selected. -->
 <div class="view-panel hidden" id="view-download">
   <div class="card">
     <h3>{{ t('Download and install') }}</h3>
-    <p class="muted small">{{ t('Paste a download link and SLPM will download it and install it automatically.') }}</p>
+    <p class="muted small">{{ t('Paste a link. SLPM downloads it in the background and tries to detect and install it when it finishes unless another file is selected.') }}</p>
     <div class="drop">
       <input id="download-url" type="text" dir="ltr" placeholder="{{ t('Paste a download link, like https://example.com/app.AppImage') }}" autocomplete="off">
       <button class="btn btn-primary" id="download-btn" disabled>{{ t('Download') }}</button>

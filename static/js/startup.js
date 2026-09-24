@@ -1,4 +1,4 @@
-/* Startup Apps: what a session starts by itself, plus an add button.
+/* Startup Apps: entries that start with a session, plus an add button.
  *
  * The list is rebuilt from the server after every change rather than edited in place,
  * because a system entry and its user override are the same row and only the server
@@ -6,8 +6,8 @@
  *
  * The Simple/Advanced switch lives in the tab row (base.html) and is owned by prefs.js,
  * because the choice applies to the Installed Apps tab too. In Simple mode the list is
- * the user's own entries only, and their switch-off control is the only one offered -
- * the entries packages installed are Advanced Mode's business.
+ * the user's own entries only, and their turn-off control is the only one offered;
+ * packaged entries belong to Advanced Mode.
  */
 
 const state = {
@@ -39,10 +39,8 @@ SLPM.onModeChange(mode => {
 function applyModeChrome() {
   const advanced = state.mode === 'advanced';
   $('#subtitle').textContent = advanced
-    ? T('Programs that start by themselves when you log in, including the ones the '
-        + 'system set up.')
-    : T('Only the startup apps you added yourself. Switch to Advanced to see everything '
-        + 'that starts with the session.');
+    ? T('Startup apps that start when you log in, including system startup apps.')
+    : T('Only the startup apps you added yourself. Switch to Advanced Mode to see system startup apps.');
   // The system/yours split only exists in the advanced list, where both appear.
   const opt = $('#filter').querySelector('option[value="system"]');
   if (opt) opt.hidden = !advanced;
@@ -55,7 +53,7 @@ function applyModeChrome() {
 /* --------------------------------------------------------------- loading */
 
 async function load() {
-  setLoading(true, T('Reading startup programs…'));
+  setLoading(true, T('Reading startup apps…'));
   const r = await api('/api/startup');
   setLoading(false);
   if (!r.ok) return toast(T('Could not list startup apps'), r.message, 'bad');
@@ -84,9 +82,8 @@ function render() {
     $('#empty-note').textContent = state.query
       ? T('Nothing matched “{q}”.', { q: state.query })
       : (state.mode === 'simple'
-          ? T('You have not added any startup apps yourself yet. Switch to Advanced to '
-              + 'see everything the system starts on its own.')
-          : T('No startup programs matched.'));
+          ? T('No startup apps added yet. Switch to Advanced Mode to see system startup apps.')
+          : T('No startup apps matched.'));
     return;
   }
   empty.classList.add('hidden');
@@ -147,8 +144,7 @@ function closeButton(item) {
 function setEnabled(item) {
   modal({
     title: T('Turn off {name}?', { name: item.name }),
-    html: `<p>${esc(T('This app will no longer start when you log in. The application '
-      + 'stays installed and can still be opened from your menu.'))}</p>
+    html: `<p>${esc(T('This startup app will no longer start when you log in. It stays installed and can still be opened from your menu.'))}</p>
       <p class="small muted">${esc(T('You can add it again later from Add startup app.'))}</p>`,
     buttons: [
       { label: T('Cancel'), kind: 'ghost', onClick: closeModal },
@@ -184,13 +180,11 @@ async function addDialog() {
   }
   const apps = r.apps || [];
   if (!apps.length) {
-    $('#modal .body').innerHTML = `<p>${esc(T('No installed application with a launch '
-      + 'command was found.'))}</p>`;
+    $('#modal .body').innerHTML = `<p>${esc(T('No installed app with a launch command was found.'))}</p>`;
     return;
   }
   $('#modal .body').innerHTML = `
-    <p class="muted small">${esc(T('Pick the application that should start when you log '
-      + 'in.'))}</p>
+    <p class="muted small">${esc(T('Pick the app to add as a startup app.'))}</p>
     <input id="cand-search" type="search" placeholder="${esc(T('Search apps…'))}"
            autocomplete="off">
     <div class="choices" id="cand-list"></div>`;
@@ -202,7 +196,7 @@ async function addDialog() {
       (a.exec || '').toLowerCase().includes(q));
     list.innerHTML = '';
     if (!hits.length) {
-      list.innerHTML = `<p class="small muted">${esc(T('No applications matched.'))}</p>`;
+      list.innerHTML = `<p class="small muted">${esc(T('No apps matched.'))}</p>`;
       return;
     }
     hits.slice(0, 200).forEach(app => {
