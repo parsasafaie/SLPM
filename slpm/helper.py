@@ -52,8 +52,15 @@ def _stale(path):
 
 
 def client(sock_path, argv, timeout=600):
-    """Send one command to a running helper. Returns (rc, out, err) with rc=-1 on error."""
+    """Send one command to a running helper.
+
+    Returns (rc, out, err) on a real reply, or None when no helper is reachable so the
+    caller can fall back to pkexec/sudo. A helper that answers with a refusal is a real
+    answer, not a reason to give up: `rc` is 126 and the caller decides.
+    """
     if not sock_path or not Path(sock_path).exists():
+        return None
+    if _stale(sock_path):
         return None
     s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     s.settimeout(timeout)
@@ -73,8 +80,8 @@ def client(sock_path, argv, timeout=600):
             chunks.append(b)
         data = json.loads(b"".join(chunks) or b"{}")
         return data.get("rc", -1), data.get("out", ""), data.get("err", "")
-    except (OSError, ValueError) as exc:
-        return -1, "", f"helper communication failed: {exc}"
+    except (OSError, ValueError):
+        return None
     finally:
         s.close()
 
@@ -136,11 +143,16 @@ def serve(sock_path):
     srv.bind(str(sock_path))
     os.chmod(sock_path, 0o600)
     # The connecting process is the unprivileged launcher, not root, so the socket
-    # has to be reachable across the uid boundary.
-    try:
-        os.chown(sock_path, int(os.environ.get("PKEXEC_UID", -1)), -1)
-    except (OSError, ValueError):
-        pass
+    # has to be reachable across the uid boundary. pkexec sets PKEXEC_UID; sudo does
+    # not, and in that case chowning to -1 would leave the socket owned by root with
+    # mode 0600 - the caller could never connect, and every privileged action would
+    # report an auth failure. SUDO_UID is the equivalent when sudo started us.
+    owner = os.environ.get("PKEXEC_UID") or os.environ.get("SUDO_UID")
+    if owner:
+        try:
+            os.chown(sock_path, int(owner), -1)
+        except (OSError, ValueError):
+            pass
     srv.listen(8)
     srv.settimeout(IDLE_TIMEOUT)
 
@@ -150,9 +162,20 @@ def serve(sock_path):
         nonlocal last
         last = time.time()
         try:
+            # A single recv() can return a partial request; read until the client's
+            # shutdown(SHUT_WR) closes its side, the same way client() reads the reply.
             conn.settimeout(30)
-            raw = conn.recv(65536)
-            req = json.loads(raw or b"{}")
+            chunks = []
+            total = 0
+            while True:
+                b = conn.recv(65536)
+                if not b:
+                    break
+                total += len(b)
+                if total > MAX_MSG:
+                    break
+                chunks.append(b)
+            req = json.loads(b"".join(chunks) or b"{}")
             argv = req.get("argv") or []
             if not _allowed(argv):
                 payload = {"rc": 126, "out": "", "err": f"refused by helper: {argv}"}
@@ -188,7 +211,7 @@ def serve(sock_path):
 # but a caller using apt/dpkg as a way to run something unexpected. Package names and
 # local archive paths are the only non-flag arguments accepted, and neither may carry
 # whitespace or a leading dash that could be read as an option.
-_ALLOWED_PROGRAMS = {"apt-get", "dpkg", "snap"}
+_ALLOWED_PROGRAMS = {"apt-get", "dpkg", "snap", "flatpak"}
 _PKG_ACTIONS = {"install", "remove", "purge"}
 _NAME_ONLY_ACTIONS = {"autoremove", "update", "upgrade"}
 _SAFE_ARG = re.compile(r"^[A-Za-z0-9/.][A-Za-z0-9+._:/=,-]*$")

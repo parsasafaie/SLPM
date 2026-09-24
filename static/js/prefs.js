@@ -86,6 +86,23 @@ const SLPM = (() => {
       'عملیات بسته‌ها ممکن است طول بکشد. این پنجره را باز نگه دارید.',
     'Already busy': 'در حال انجام کار دیگری است',
     'No file chooser': 'برنامهٔ انتخاب فایل وجود ندارد',
+    /* ------------------------------------------------- downloads (install) */
+    'Waiting…': 'در انتظار…',
+    'Downloading…': 'در حال دانلود…',
+    'Paused': 'متوقف',
+    'Failed': 'ناموفق',
+    'Stopped': 'توقف شده',
+    'in progress': 'در حال انجام',
+    'Continue': 'ادامه',
+    'Pause': 'توقف',
+    'Stop': 'توقف',
+    'Clear': 'پاک کردن',
+    'Download failed': 'دانلود ناموفق بود',
+    'Download complete': 'دانلود کامل شد',
+    'Download ready, installing…': 'دانلود آماده است، در حال نصب…',
+    'The download could not be completed.': 'دانلود کامل نشد.',
+    'Not installable': 'قابل نصب نیست',
+    'This file could not be installed.': 'این فایل قابل نصب نبود.',
 
     /* ------------------------------------------------------------ apps.js */
     'Every installed package, including system components.':

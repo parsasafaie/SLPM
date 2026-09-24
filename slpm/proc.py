@@ -7,7 +7,12 @@ import subprocess
 from . import i18n
 
 TIMEOUT = 300
-PKEXEC_TIMEOUT = 45   # how long to wait for a person to answer the polkit dialog
+# How long to wait for a person to answer the polkit dialog. This is the time to *answer*,
+# not a cap on the operation: pkexec runs its child to completion, and a package operation
+# (a kernel install, a big upgrade) routinely takes longer than a minute. Bounding the whole
+# pkexec call by the dialog deadline killed long operations mid-transaction and left apt
+# holding the dpkg lock, so the dialog and the work now get separate budgets.
+PKEXEC_TIMEOUT = 900
 
 # The language this request is being served in. A module-level global would be shared
 # by every thread Flask runs, so two people with the page open in different languages
@@ -114,22 +119,25 @@ def privileged(argv, timeout=TIMEOUT):
 
     from . import helper  # late import: helper imports this module
 
+    # A live helper answers with a real result; a refusal (rc 126) is not a final
+    # answer, because the allowlist may simply not cover this operation. Fall through
+    # to pkexec for it, so an unsupported-but-legitimate command still has a path.
     rc = helper.client(helper_socket(), argv, timeout=timeout)
-    if rc is not None:
+    if rc is not None and rc[0] != 126:
         return rc
 
     auth_err = ""
     if which("pkexec"):
-        # pkexec shows a desktop dialog. Give the user time to answer, but far less
-        # than a package operation needs: if nobody answers we must report that
-        # instead of holding the request open.
+        # pkexec runs the whole command, not just the dialog, so the timeout has to be
+        # one a package operation can finish inside. A short "dialog" timeout used to
+        # kill installs and removals mid-flight and report them as an unanswered
+        # dialog, leaving apt holding the dpkg lock.
         rc, out, err = run(["pkexec", *argv], timeout=PKEXEC_TIMEOUT)
         if rc == 0:
             return rc, out, err
         if rc == -1:
-            auth_err = t("The permission dialog was not answered. Approve the request "
-                         "when it appears, or start the helper once from the Install "
-                         "page.")
+            auth_err = t("The command did not finish in time. It may still be running; "
+                         "close any package tool and try again.")
         else:
             auth_err = err
         if rc != -1 and not _is_auth_failure(err):

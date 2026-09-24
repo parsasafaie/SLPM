@@ -134,7 +134,11 @@ function row(item) {
   const actions = $('.actions', el);
   if (item.can_launch) {
     actions.appendChild(button(T('Launch'), async () => {
-      const r = await api('/api/launch', item);
+      // Only the id goes to the server: the launch command is looked up from the
+      // desktop entries the server itself scanned, never taken from this request.
+      const r = await api('/api/launch', {
+        id: item.id, manager: item.manager, package: item.package,
+      });
       toast(r.ok ? T('Launching') : T('Could not launch'), r.ok ? item.name : r.message,
         r.ok ? 'ok' : 'bad');
     }));
@@ -170,8 +174,10 @@ async function details(item) {
     html: `<p class="muted">${esc(T('Reading details…'))}</p>`,
     buttons: [{ label: T('Close'), kind: 'ghost', onClick: closeModal }]
   });
+  // The package database endpoint is Advanced-only, so Simple Mode shows the row it
+  // already has. Asking anyway would answer 403 and leave the panel empty.
   let extra = '';
-  if (item.package && item.manager === 'apt') {
+  if (state.mode === 'advanced' && item.package && item.manager === 'apt') {
     const r = await api(`/api/packages/${encodeURIComponent(item.package)}`);
     if (r.ok) {
       const p = r.package;
@@ -183,7 +189,8 @@ async function details(item) {
         [T('Files installed')]: (p.files || []).length,
       });
     }
-  } else {
+  }
+  if (!extra) {
     extra = kv({
       [T('Version')]: item.version, [T('Size')]: item.size,
       [T('Source')]: item.manager, [T('Shortcut')]: item.file,

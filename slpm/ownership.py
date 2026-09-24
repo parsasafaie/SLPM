@@ -159,33 +159,54 @@ def _build_log_dates():
 
 
 def _build_seed_snaps():
-    """Snap names baked into the system image."""
+    """Snap names baked into the system image, or None when the seed cannot be read.
+
+    None - not an empty set - on a read failure: an unreadable seed says nothing about
+    which snaps came with the image, and an empty set would silently claim that every
+    snap was installed by the user. The caller treats None as "cannot tell" (see
+    seeded_snap), which is what keeps Simple Mode failing closed here as everywhere else.
+    """
     try:
         text = SNAP_SEED.read_text(encoding="utf-8", errors="replace")
     except OSError:
-        return set()
+        return None
     return set(re.findall(r"^\s*name:\s*(\S+)", text, re.M))
 
 
 def _build_flatpak_times():
-    """{app id: creation time} for flatpak deployments, system and user."""
+    """{app id: install time} for flatpak deployments, system and user.
+
+    The layout is ``<app-id>/<arch>/<branch>/<commit>``, so the app id is the *first*
+    level under the root - the level below it is the architecture (x86_64, aarch64),
+    not the app. The commit directory is created when the app (or that branch) is
+    installed and is not rewritten by a plain update, so its mtime is used as the
+    arrival time; st_ctime is not, because on Linux it tracks metadata changes (a chmod
+    moves it) rather than creation.
+    """
     times = {}
     for root in (FLATPAK_SYSTEM, FLATPAK_USER):
         if not root.is_dir():
             continue
         try:
-            for arch_dir in root.iterdir():
-                if not arch_dir.is_dir():
+            for app_dir in root.iterdir():
+                if not app_dir.is_dir():
                     continue
-                for app_dir in arch_dir.iterdir():
-                    if not app_dir.is_dir():
+                best = None
+                for arch_dir in app_dir.iterdir():
+                    if not arch_dir.is_dir():
                         continue
-                    # <app-id>/<arch>/<branch>/<commit>: the branch dir is created when
-                    # the app is installed and is not rewritten by a plain update.
-                    try:
-                        times.setdefault(app_dir.name, app_dir.stat().st_ctime)
-                    except OSError:
-                        pass
+                    for branch_dir in arch_dir.iterdir():
+                        if not branch_dir.is_dir():
+                            continue
+                        for commit in branch_dir.iterdir():
+                            try:
+                                stamp = commit.stat().st_mtime
+                            except OSError:
+                                continue
+                            if best is None or stamp < best:
+                                best = stamp
+                if best is not None:
+                    times[app_dir.name] = best
         except OSError:
             continue
     return times

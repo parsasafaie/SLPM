@@ -9,6 +9,7 @@ Resume works through the HTTP Range header: the connection is reopened with
 ``Range: bytes=<downloaded>-`` so an interrupted download continues from the bytes
 already on disk, instead of starting over.
 """
+import contextvars
 import os
 import re
 import threading
@@ -24,14 +25,23 @@ from .i18n import tr as _tr
 CHUNK = 64 * 1024           # read this many bytes per loop
 CONNECT_TIMEOUT = 15        # connect + read timeout for each connection
 POLL = 0.2                  # how often the thread checks for pause/stop
+MAX_REDIRECTS = 10          # a misbehaving server must not recurse forever
+KEEP_FINISHED = 200         # jobs remembered so the status bar can still show them
 
 _jobs = {}                  # id -> DownloadJob
 _jobs_lock = threading.Lock()
 _id_counter = [0]
 
+# A download thread is not the Flask request thread, so it does not inherit the
+# request's language contextvar. The language is captured when the job starts - on
+# the request thread - and re-applied inside the thread, so a failure message about
+# a download the user started in Persian comes back in Persian too.
+_lang_ctx = contextvars.ContextVar("slpm_download_lang", default=None)
+
 
 def _t(english, **values):
-    return _tr(proc.lang(), english, **values)
+    lang = _lang_ctx.get() or proc.lang()
+    return _tr(lang, english, **values)
 
 
 def _downloads_dir():
@@ -209,7 +219,7 @@ class DownloadJob:
             with self._lock:
                 self.state = "failed"
                 self.error = _t("Download failed.")
-            return "done"
+            return "failed"
         finally:
             # Always release the connection. This matters most on pause: a server that
             # serves one request at a time (e.g. a simple http.server) stays busy on the

@@ -16,6 +16,7 @@ import re
 import shutil
 import tempfile
 from pathlib import Path
+from urllib.parse import quote
 
 from . import desktop, proc
 from .i18n import tr as _tr
@@ -90,6 +91,13 @@ def _command_ok(argv):
 
 def _slug(name):
     return re.sub(r"[^A-Za-z0-9._-]+", "-", name).strip("-").lower() or "app"
+
+
+def _clean_field(text):
+    """A .desktop value is a single line. A newline or control character in a name,
+    comment or icon would split the value into bogus keys and corrupt the file, so they
+    are stripped before anything is written."""
+    return re.sub(r"[\r\n\x00-\x1f\x7f]", "", text or "").strip()
 
 
 def _body(name, command, icon="", comment=""):
@@ -192,7 +200,8 @@ def _collect_from(roots):
                 # added through SLPM by the user.
                 "_shadows_packaged": source == "user" and path.name in packaged_names,
                 "_slpm_added": source == "user" and path.name.startswith(PREFIX),
-                "icon_url": (f"/api/icon?name={icon}&app={path.name}" if icon else ""),
+                "icon_url": (f"/api/icon?name={quote(icon)}&app={quote(path.name)}"
+                             if icon else ""),
             }
     return sorted(rows.values(), key=lambda r: r["name"].lower())
 
@@ -245,7 +254,7 @@ def add(name, exec_line, icon="", comment=""):
     files that would start the program twice: an entry already carrying that command is
     turned on and reported instead of being duplicated.
     """
-    name = (name or "").strip()
+    name = _clean_field(name)
     command = clean_exec(exec_line)
     if not name:
         return False, _t("This program has no name, so it cannot be added."), ""
@@ -254,6 +263,8 @@ def add(name, exec_line, icon="", comment=""):
     if not _command_ok(desktop.exec_argv(command)):
         return False, _t("The command for this program was not found on this "
                          "computer."), ""
+    icon = _clean_field(icon)
+    comment = _clean_field(comment)
 
     for rec in collect():
         if clean_exec(rec["exec"]) == command:
@@ -265,7 +276,15 @@ def add(name, exec_line, icon="", comment=""):
                 return True, _t("{name} will now start when you log in.", name=name), ""
             return ok, msg, detail
 
-    target = USER_AUTOSTART / f"{PREFIX}{_slug(name)}.desktop"
+    # Two different programs can slugify to the same file name ("Foo Bar" and
+    # "foo.bar" both become "foo-bar"), which the command dedupe above cannot catch.
+    # Give the new entry a distinct name instead of overwriting the first one's file.
+    base = f"{PREFIX}{_slug(name)}"
+    target = USER_AUTOSTART / f"{base}.desktop"
+    counter = 2
+    while target.exists():
+        target = USER_AUTOSTART / f"{base}-{counter}.desktop"
+        counter += 1
     _write(target, _body(name, command, icon, comment))
     return True, _t("{name} will now start when you log in.", name=name), ""
 
@@ -288,7 +307,12 @@ def set_enabled(entry_id, enabled):
         return False, _t("This startup entry is no longer there."), ""
 
     if not enabled:
-        if rec["source"] == "user":
+        # A user's own file is deleted to switch it off. A packaged entry - or a user
+        # file that is an override of a packaged one - must not be deleted: removing it
+        # leaves the package's own (enabled) file in place, so the app would still start.
+        # Those are switched off by (re)writing an override that masks the packaged file,
+        # keeping the package's file byte-for-byte intact.
+        if rec["source"] == "user" and not rec.get("_shadows_packaged"):
             try:
                 Path(rec["file"]).unlink()
             except OSError as exc:

@@ -152,7 +152,12 @@ def install_deb(path):
     steps.append({"cmd": " ".join(argv), "rc": rc})
     if rc == 0:
         return True, _t("Installed."), steps
-    err_tail = _apt_reason(out, err)
+    if rc == -2:
+        # Privileges were refused, so nothing ever reached apt. Falling through to dpkg
+        # would ask for a password a second time and still install nothing, and the
+        # caller unpacks three values, so the detail goes into the message.
+        return False, _t("Installation failed\n{detail}",
+                         detail=err or _t("No details reported.")), steps
 
     argv = ["dpkg", "-i", path]
     rc, out, err = proc.privileged(argv)
@@ -180,6 +185,11 @@ def uninstall(name):
     rc, out, err = proc.privileged(["apt-get", "remove", "-y", *_essential_flag(name), name])
     if rc == 0:
         return True, _t("{name} was removed.", name=name), ""
+    if rc == -2:
+        # Privileges were refused, so nothing reached apt. Reporting an
+        # architecture/dependency problem here would send the user chasing a
+        # cause that does not exist.
+        return False, _t("Could not remove {name}.", name=name), err or _t("No details reported.")
     return False, _t("Could not remove {name}.", name=name), _apt_reason(out, err)
 
 
@@ -187,6 +197,8 @@ def purge(name):
     rc, out, err = proc.privileged(["apt-get", "purge", "-y", *_essential_flag(name), name])
     if rc == 0:
         return True, _t("{name} was purged.", name=name), ""
+    if rc == -2:
+        return False, _t("Could not purge {name}.", name=name), err or _t("No details reported.")
     return False, _t("Could not purge {name}.", name=name), _apt_reason(out, err)
 
 

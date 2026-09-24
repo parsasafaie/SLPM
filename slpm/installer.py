@@ -265,14 +265,22 @@ def _fail(title, detail, kind):
 
 
 def uninstall_desktop_entry(desktop_path):
-    """Used for apps SLPM owns (AppImages registered in ~/.local/share/applications)."""
+    """Used for apps SLPM owns (AppImages registered in ~/.local/share/applications).
+
+    Every path returns (ok, message, detail): the endpoint unpacks three values from
+    this, so the branches that returned only two raised ValueError and turned a routine
+    "not there any more" into a 500.
+    """
     p = Path(desktop_path)
     if p.suffix != ".desktop" or not p.exists():
-        return False, _t("That shortcut no longer exists.")
+        return False, _t("That shortcut no longer exists."), ""
     try:
         p.resolve().relative_to(desktop.USER_APPS.resolve())
     except ValueError:
-        return False, _t("SLPM only removes shortcuts it created itself.")
+        return False, _t("SLPM only removes shortcuts it created itself."), ""
     if p.name.startswith("slpm-"):
-        return appimage.uninstall(p)
-    return desktop.remove(p) and (True, _t("The shortcut was removed."))
+        ok, msg = appimage.uninstall(p)
+        return ok, msg, ""
+    if not desktop.remove(p):
+        return False, _t("The shortcut could not be removed."), ""
+    return True, _t("The shortcut was removed."), ""

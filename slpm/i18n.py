@@ -109,6 +109,7 @@ _FA = {
         "می‌کند. اول این فایل را تبدیل کنید.",
 
     "Installation failed": "نصب انجام نشد",
+    "Installation failed\n{detail}": "نصب انجام نشد\n{detail}",
     "The package was not installed.": "این بسته نصب نشد.",
     "Debian package": "بستهٔ Debian",
     "Flatpak is not installed": "Flatpak نصب نیست",
@@ -144,6 +145,7 @@ _FA = {
     "SLPM only removes shortcuts it created itself.":
         "SLPM فقط میان‌برهایی را حذف می‌کند که خودش ساخته است.",
     "The shortcut was removed.": "میان‌بر حذف شد.",
+    "The shortcut could not be removed.": "میان‌بر حذف نشد.",
 
     # ------------------------------------------------------------------ appimage
     "This file is not a working AppImage. Only self-contained AppImage files can be "
@@ -203,6 +205,7 @@ _FA = {
     "No graphical session detected - cannot launch apps.":
         "هیچ نشست گرافیکی پیدا نشد — برنامه‌ها اجرا نمی‌شوند.",
     "This app has no launch command.": "این برنامه فرمان اجرایی ندارد.",
+    "This app is no longer installed.": "این برنامه دیگر نصب نیست.",
     "{name} was removed.": "{name} حذف شد.",
     "Could not remove {name}.": "{name} حذف نشد.",
 

@@ -146,7 +146,10 @@ const downloadBar = $('#download-bar');
 const downloadRows = $('#download-rows');
 const downloadBarNote = $('#download-bar-note');
 const ACTIVE_STATES = new Set(["queued", "running", "paused"]);
-const doneIds = new Set();   // downloads already shown as finished, so we stop redrawing them
+/* Downloads already turned into a finished row. Cleared when the user dismisses the
+   row, so a job the server still reports is drawn once and not again on every poll. */
+const doneIds = new Set();
+const failedIds = new Set();
 
 const ICONS = {
   pause: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5h3v14H9zM14 5h3v14h-3z"/></svg>`,
@@ -215,16 +218,22 @@ function formatBytes(n) {
 }
 
 function renderDownloads(list) {
-  downloadBar.classList.toggle('hidden', list.length === 0 && doneIds.size === 0);
+  downloadBar.classList.toggle('hidden',
+    list.length === 0 && doneIds.size === 0 && failedIds.size === 0);
 
-  // Active downloads are driven by the server; finished/stopped ones are dropped.
+  // Active downloads are driven by the server; done and failed ones become permanent
+  // rows (the user dismisses them), stopped ones are dropped.
   const ids = new Set();
   for (const d of list) {
     if (d.state === 'done') {
       if (!doneIds.has(d.id)) { doneIds.add(d.id); renderDone(d); }
       continue;
     }
-    if (!ACTIVE_STATES.has(d.state)) continue;   // failed / stopped -> remove
+    if (d.state === 'failed') {
+      if (!failedIds.has(d.id)) { failedIds.add(d.id); renderFailed(d); }
+      continue;
+    }
+    if (!ACTIVE_STATES.has(d.state)) continue;   // stopped -> remove
     ids.add(d.id);
     renderActive(d);
   }
@@ -273,9 +282,8 @@ function renderActive(d) {
 
   const pct = d.percent;
   row.querySelector('.download-bar-fill').style.width = `${pct}%`;
-  row.querySelector('.download-meta').textContent = d.state === 'failed'
-    ? (d.error || STATE_LABEL.failed)
-    : `${formatBytes(d.downloaded)} / ${formatBytes(d.total)} · ${pct}%`;
+  row.querySelector('.download-meta').textContent =
+    `${formatBytes(d.downloaded)} / ${formatBytes(d.total)} · ${pct}%`;
 }
 
 function renderDone(d) {
@@ -300,6 +308,21 @@ function renderDone(d) {
   }
 }
 
+function renderFailed(d) {
+  const row = document.createElement('div');
+  row.className = 'download-row download-done download-failed';
+  row.innerHTML = `
+    <span class="download-check fail" aria-hidden="true">✕</span>
+    <span class="download-name" tabindex="0">${esc(d.filename)}</span>
+    <span class="download-meta">${esc(d.error || T('The download could not be completed.'))}</span>
+    <div class="download-actions"></div>`;
+  const actions = row.querySelector('.download-actions');
+  const clear = controlBtn(T('Clear'), 'close', null);
+  clear.addEventListener('click', () => { row.remove(); failedIds.delete(d.id); });
+  actions.appendChild(clear);
+  downloadRows.appendChild(row);
+}
+
 function controlBtn(label, iconKey, jobId, action, kind) {
   const btn = document.createElement('button');
   btn.type = 'button';
@@ -316,8 +339,17 @@ function controlBtn(label, iconKey, jobId, action, kind) {
   return btn;
 }
 
+let autoFilledPath = '';
 function installSavedFile(d) {
   if (!d.path || !pathInput) return;
+  const current = pathInput.value.trim();
+  // Auto-installing must not clobber a different file the user has already pointed at:
+  // in that case the download is finished but the install is left to them.
+  if (current && current !== d.path && current !== autoFilledPath) {
+    toast(T('Download complete'), d.filename, 'ok');
+    return;
+  }
+  autoFilledPath = d.path;
   pathInput.value = d.path;
   detected = null;
   installBtn.disabled = true;

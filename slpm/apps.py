@@ -22,6 +22,7 @@ which is identical for `apt install ./vryon.deb` and for a package that shipped 
 the distribution.
 """
 from functools import lru_cache
+from urllib.parse import quote
 
 from . import apt, desktop, ownership
 from .i18n import tr as _tr
@@ -103,10 +104,24 @@ def apps(mode="simple"):
         # everything in it can be removed from here - snap and flatpak included, through
         # their own manager.
         rec["removable"] = bool(meta) or manager == "appimage"
-        rec["icon_url"] = f"/api/icon?name={rec['icon']}&app={rec['id']}" if rec["icon"] else ""
+        rec["icon_url"] = (f"/api/icon?name={quote(rec['icon'])}&app={quote(rec['id'])}"
+                           if rec["icon"] else "")
         rows.append(rec)
 
     return sorted(rows, key=lambda r: r["name"].lower())
+
+
+def bust_meta_cache():
+    """Drop every remembered package/snap/flatpak row.
+
+    The caches below make repeat /api/apps calls cheap, but a package operation
+    (install, remove, upgrade) changes exactly the facts they hold: a newly
+    installed package would keep showing an empty row, and a removed one its old
+    version, until the server restarts. Call this after any such operation.
+    """
+    _pkg_meta.cache_clear()
+    _snap_meta.cache_clear()
+    _flatpak_meta.cache_clear()
 
 
 @lru_cache(maxsize=4096)

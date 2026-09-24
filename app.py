@@ -18,6 +18,17 @@ from slpm import (appimage, apt, autostart, desktop, flatpak_snap, download, hel
 
 app = Flask(__name__)
 app.config["JSON_SORT_KEYS"] = False
+# Cap request bodies; nothing SLPM accepts is larger than a path plus options.
+app.config["MAX_CONTENT_LENGTH"] = 256 * 1024
+# Flask >= 3.1 rejects requests whose Host header is not in this list. Without it a
+# page on another origin can reach the local server through DNS rebinding, and every
+# endpoint here acts on the user's machine.
+try:
+    from werkzeug.middleware.proxy_fix import ProxyFix  # noqa: F401  (optional)
+
+    app.config["TRUSTED_HOSTS"] = ["127.0.0.1", "localhost", "[::1]", "::1"]
+except Exception:
+    pass
 
 LANG_COOKIE = "slpm_lang"
 THEME_COOKIE = "slpm_theme"
@@ -194,6 +205,7 @@ def api_install():
             return _err(exc)
         finally:
             _job.update(active=False, label="")
+            apps_mod.bust_meta_cache()
 
 
 @app.post("/api/helper/start")
@@ -275,26 +287,16 @@ def _placeholder():
 
 @app.post("/api/launch")
 def api_launch():
-    data = request.json or {}
-    rec = {
-        "exec": data.get("exec", ""),
-        "terminal": bool(data.get("terminal")),
-        "file": data.get("file", ""),
-        "manager": data.get("manager", ""),
-        "package": data.get("package", ""),
-    }
-    try:
-        if rec["manager"] == "flatpak" and rec["package"]:
-            rc, out, err = proc.run(["flatpak", "run", rec["package"]], timeout=20)
-            if rc == 0:
-                return jsonify({"ok": True, "message": proc.t("Launching.")})
-        elif rec["manager"] == "snap" and rec["package"]:
-            import subprocess
+    """Launch an installed app, identified only by its list id.
 
-            subprocess.Popen(["snap", "run", rec["package"]], start_new_session=True,
-                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            return jsonify({"ok": True, "message": proc.t("Launching.")})
-        rc, out, err = desktop.launch(rec)
+    The request carries no command line: the server resolves the id against its own
+    scan and runs that entry's own Exec= (or its package's manager command). Taking
+    ``exec`` from the request made this endpoint a way to run any command as the user.
+    """
+    data = request.json or {}
+    entry_id = str(data.get("id", ""))
+    try:
+        rc, out, err = desktop.launch_by_id(entry_id)
         if rc == 0:
             return jsonify({"ok": True, "message": proc.t("Launching.")})
         return jsonify({"ok": False, "message": proc.t("Could not start this app."),
@@ -340,6 +342,7 @@ def api_uninstall():
             return _err(exc)
         finally:
             _job.update(active=False, label="")
+            apps_mod.bust_meta_cache()
 
 
 # -------------------------------------------------------------------- startup
@@ -380,8 +383,7 @@ def api_startup_candidates():
                 "name": rec["name"],
                 "exec": command,
                 "icon": rec["icon"],
-                "icon_url": (f"/api/icon?name={rec['icon']}&app={rec['id']}"
-                             if rec["icon"] else ""),
+                "icon_url": rec["icon_url"],
                 "comment": rec["comment"] or rec["generic"],
             })
         return jsonify({"ok": True, "apps": rows})
@@ -519,6 +521,7 @@ def api_package_remove():
             return _err(exc)
         finally:
             _job.update(active=False, label="")
+            apps_mod.bust_meta_cache()
 
 
 @app.post("/api/packages/autoremove")
@@ -540,6 +543,7 @@ def api_autoremove():
             return _err(exc)
         finally:
             _job.update(active=False, label="")
+            apps_mod.bust_meta_cache()
 
 
 # ------------------------------------------------------------------- status

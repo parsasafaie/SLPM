@@ -261,7 +261,10 @@ def _provided_by(root, entry, path):
     if entry.get("X-SnapInstanceName"):
         return f"snap:{entry['X-SnapInstanceName']}"
     if "snapd" in str(root):
-        return f"snap:{entry.get('X-SnapAppName', '')}".rstrip(":")
+        # "snap:" with no name would still split fine, but an entry whose snap name is
+        # unknown is better reported as unowned than as a snap called "".
+        name = entry.get("X-SnapAppName", "")
+        return f"snap:{name}" if name else ""
     if "flatpak" in str(root):
         # The file name is the app id: org.telegram.desktop.desktop
         return f"flatpak:{Path(path).name[:-len('.desktop')]}"
@@ -269,14 +272,16 @@ def _provided_by(root, entry, path):
 
 
 def icon_path(icon_name, app_id=""):
-    """Resolve an Icon= value to a real file path, or None."""
+    """Resolve an Icon= value to a real file path, or None.
+
+    Only icon directories are searched. An Icon= value that is an absolute path is
+    accepted only when it sits under one of those directories: the API endpoint that
+    calls this is reachable by anything that can talk to localhost, and returning
+    whatever path it was handed turned ``/api/icon?name=/home/you/.ssh/id_rsa`` into a
+    file-read of any file the user can read.
+    """
     if not icon_name:
         return None
-    p = Path(icon_name)
-    if p.is_absolute() and p.exists():
-        return str(p)
-    if icon_name.startswith("applications-"):
-        pass
     search_roots = [
         ICON_DIR / "scalable/apps",
         ICON_DIR / "48x48/apps",
@@ -288,11 +293,20 @@ def icon_path(icon_name, app_id=""):
         Path("/usr/share/pixmaps"),
     ]
     exts = ("", ".png", ".svg", ".xpm")
-    for root in search_roots:
-        for ext in exts:
-            cand = root / f"{icon_name}{ext}"
-            if cand.exists():
-                return str(cand)
+
+    p = Path(icon_name)
+    if p.is_absolute():
+        # An absolute Icon= is legal in a .desktop file, but it has to point into an
+        # icon directory; anything else is not an icon and is not served.
+        resolved = _safe_icon_file(p, search_roots)
+        if resolved:
+            return resolved
+    else:
+        for root in search_roots:
+            for ext in exts:
+                cand = root / f"{icon_name}{ext}"
+                if cand.exists():
+                    return str(cand)
     name = app_id or icon_name
     rc, out, _ = proc.run(
         ["find", "/usr/share/icons", str(ICON_DIR), "-iname", f"{name}.*",
@@ -300,8 +314,29 @@ def icon_path(icon_name, app_id=""):
     )
     if rc == 0:
         for line in proc.lines(out):
-            if line.lower().endswith((".png", ".svg", ".xpm")):
-                return line
+            line = line.strip()
+            if not line.lower().endswith((".png", ".svg", ".xpm")):
+                continue
+            resolved = _safe_icon_file(Path(line), search_roots)
+            if resolved:
+                return resolved
+    return None
+
+
+def _safe_icon_file(path, search_roots):
+    """The path if it is a real file inside one of the icon directories, else None."""
+    try:
+        resolved = path.resolve()
+    except OSError:
+        return None
+    if not resolved.is_file():
+        return None
+    for root in search_roots:
+        try:
+            resolved.relative_to(root.resolve())
+        except (ValueError, OSError):
+            continue
+        return str(resolved)
     return None
 
 
@@ -364,7 +399,6 @@ def launch(desktop_record):
     argv = exec_argv(desktop_record["exec"])
     if not argv:
         return 1, "", _t("This app has no launch command.")
-    env = {}
     if not proc.have_graphical_session():
         # Launching a GUI app headless is pointless; report instead of silently failing.
         return 1, "", _t("No graphical session detected - cannot launch apps.")
@@ -373,6 +407,46 @@ def launch(desktop_record):
     except OSError as exc:
         return 126, "", str(exc)
     return 0, "", ""
+
+
+def launch_by_id(entry_id):
+    """Launch an installed app by its .desktop file name.
+
+    The launch endpoint must not take the command line from the request: doing so made
+    ``POST /api/launch`` a way to run any command as the user. The id is resolved
+    against the server's own scan and only that entry's own Exec= - or its own
+    package's manager command - is run, so a hand-made request cannot start anything
+    the scan did not find. It searches the full installed set (not one view's
+    filtered list) because launching is not a Simple/Advanced distinction: a real
+    installed app is runnable in either view, and the safety comes from never
+    executing client-supplied text.
+    """
+    target = str(entry_id or "")
+    if not target:
+        return 1, "", _t("This app is no longer installed.")
+    for rec in collect("advanced"):
+        if rec["id"] != target:
+            continue
+        provided = rec.get("provided_by", "")
+        if provided.startswith("snap:"):
+            name = provided.split(":", 1)[1]
+            if not name:
+                return 1, "", _t("This app has no launch command.")
+            import subprocess
+
+            subprocess.Popen(["snap", "run", name], start_new_session=True,
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            return 0, "", ""
+        if provided.startswith("flatpak:"):
+            app_id = provided.split(":", 1)[1]
+            rc, out, err = proc.run(["flatpak", "run", app_id], timeout=20)
+            if rc == 0:
+                return 0, "", ""
+            return 1, "", err or out or _t("Could not start this app.")
+        if not rec.get("exec"):
+            return 1, "", _t("This app has no launch command.")
+        return launch(rec)
+    return 1, "", _t("This app is no longer installed.")
 
 
 def subprocess_popen(argv, desktop_path):
