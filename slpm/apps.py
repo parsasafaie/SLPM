@@ -24,15 +24,9 @@ the distribution.
 from functools import lru_cache
 from urllib.parse import quote
 
-from . import apt, desktop, ownership
-from .i18n import tr as _tr
+from . import apt, desktop, ownership, proc
 
-
-def _t(english, **values):
-    """Translate a message into the language of the request being served."""
-    from . import proc
-
-    return _tr(proc.lang(), english, **values)
+_t = proc.t
 
 
 def _owner(binary, file_path):

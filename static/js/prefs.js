@@ -220,6 +220,42 @@ const SLPM = (() => {
     'Cleaning up…': 'در حال پاک‌سازی…',
     'Cleaned up': 'پاک‌سازی شد',
     'Cleanup failed': 'پاک‌سازی انجام نشد',
+    /* install-by-name box on the apps page */
+    'Package name, like vlc': 'نام بسته، مثل vlc',
+    'Snap name, like code': 'نام snap، مثل code',
+    'Flatpak app id, like org.gimp.GIMP': 'شناسهٔ Flatpak، مثل org.gimp.GIMP',
+    'Searching…': 'در حال جست‌وجو…',
+    'No packages matched.': 'بسته‌ای مطابق پیدا نشد.',
+
+    /* ------------------------------------------------------------ updates.js */
+    'This manager is not installed on this system.':
+      'این مدیر بسته روی این رایانه نصب نیست.',
+    'Updating…': 'در حال به‌روزرسانی…',
+    'Show available updates': 'نمایش به‌روزرسانی‌های در دسترس',
+    'Hide available updates': 'پنهان‌کردن به‌روزرسانی‌های در دسترس',
+    'SLPM will ask for your administrator password.':
+      'SLPM رمز عبور مدیر سیستم را خواهد خواست.',
+    'Update all system packages?': 'همهٔ بسته‌های سیستمی به‌روزرسانی شوند؟',
+    'Update all Flatpak apps?': 'همهٔ برنامه‌های Flatpak به‌روزرسانی شوند؟',
+    'Update all snap apps?': 'همهٔ برنامه‌های snap به‌روزرسانی شوند؟',
+    'Update': 'به‌روزرسانی',
+    'Update {name}?': 'به‌روزرسانی {name}؟',
+    'Only {name} will be updated to its newest version.':
+      'فقط {name} به جدیدترین نسخه به‌روزرسانی می‌شود.',
+    'Running': 'در حال اجرا',
+    ['{name} is running now. Close it first, then update.']:
+      '{name} همین حالا در حال اجراست. اول آن را ببندید، بعد به‌روزرسانی کنید.',
+    ['These are running now. Close them first, then update: {list}']:
+      'این‌ها همین حالا در حال اجرا هستند. اول آن‌ها را ببندید، بعد به‌روزرسانی کنید: {list}',
+    ['Every package on this system will be upgraded to its newest version. '
+      + 'On a large system this can take several minutes.']:
+      'همهٔ بسته‌های این سیستم به جدیدترین نسخه ارتقا می‌یابند. روی سیستم بزرگ ممکن '
+      + 'است چند دقیقه طول بکشد.',
+    ['Every Flatpak app you have installed will be updated to its newest '
+      + 'version.']:
+      'هر برنامهٔ Flatpak که نصب کرده‌اید به جدیدترین نسخه به‌روزرسانی می‌شود.',
+    ['Every snap on this system will be refreshed to its newest revision.']:
+      'هر snap این سیستم به جدیدترین نسخهٔ آن تازه می‌شود.',
 
     /* --------------------------------------------------------- startup.js */
     'Could not list startup apps': 'فهرست برنامه‌های استارتاپ خوانده نشد',

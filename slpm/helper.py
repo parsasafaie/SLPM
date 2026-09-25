@@ -26,6 +26,9 @@ from pathlib import Path
 from . import proc
 
 IDLE_TIMEOUT = 300
+# How long one package operation may run inside the helper. proc.privileged() must
+# wait at least this long for the reply, so both sides use the same number.
+RUN_TIMEOUT = 900
 MAX_MSG = 1 << 20
 
 
@@ -90,7 +93,7 @@ def spawn(sock_path, log_path):
     """Start the helper through pkexec. Returns (ok, message). The polkit dialog
     appears at this point; users without admin rights decline and we report that."""
     sock_path = Path(sock_path)
-    sock_path.parent.mkdir(parents=True, exist_ok=True)
+    _ensure_runtime_dir(sock_path.parent)
     try:
         sock_path.unlink()
     except OSError:
@@ -111,14 +114,25 @@ def spawn(sock_path, log_path):
 
     kwargs = {"env": {**os.environ, "PYTHONPATH": _project_root(),
                       "SLPM_LANG": proc.lang()}}
+    # The log will hold the output of commands run as root, so it must be created
+    # 0600 by this unprivileged process - a pre-existing 0644 file would let other
+    # local users read it.
     try:
-        import subprocess
-
-        with open(log_path, "ab") as log:
-            subprocess.Popen(argv, stdout=log, stderr=log, stdin=subprocess.DEVNULL,
-                             **kwargs)
+        log_fd = os.open(log_path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
     except OSError as exc:
         return False, proc.t("Could not start the privileged helper: {exc}", exc=exc)
+    try:
+        os.chmod(log_path, 0o600)
+    except OSError:
+        pass
+    import subprocess
+
+    with os.fdopen(log_fd, "ab") as log:
+        try:
+            subprocess.Popen(argv, stdout=log, stderr=log, stdin=subprocess.DEVNULL,
+                             **kwargs)
+        except OSError as exc:
+            return False, proc.t("Could not start the privileged helper: {exc}", exc=exc)
 
     for _ in range(60):  # up to ~30s: the user may be typing a password
         time.sleep(0.5)
@@ -127,6 +141,23 @@ def spawn(sock_path, log_path):
     return False, proc.t(
         "Root permission was not granted. SLPM asked for it with pkexec and the request "
         "was dismissed or denied.") + env_note
+
+
+def _ensure_runtime_dir(parent):
+    """Create the helper's directory 0700, and only if it is not already there.
+
+    This runs as the unprivileged user, so a directory the helper (root) might
+    otherwise recreate stays user-owned. Re-chmodding an existing directory would
+    break a shared XDG_RUNTIME_DIR the user's session created, so creation is the
+    only moment the permissions are set.
+    """
+    parent = Path(parent)
+    if not parent.is_dir():
+        parent.mkdir(parents=True, exist_ok=True)
+        try:
+            os.chmod(parent, 0o700)
+        except OSError:
+            pass
 
 
 def _project_root():
@@ -188,7 +219,7 @@ def serve(sock_path):
                 payload = {"rc": 126, "out": "", "err": proc.t(
                     "Refused by helper: {argv}", argv=argv)}
             else:
-                rc, out, err = proc.run(argv, timeout=900)
+                rc, out, err = proc.run(argv, timeout=RUN_TIMEOUT)
                 payload = {"rc": rc, "out": out[-200_000:], "err": err[-200_000:]}
             conn.sendall(json.dumps(payload).encode())
         except Exception as exc:
@@ -223,32 +254,21 @@ _ALLOWED_PROGRAMS = {"apt-get", "dpkg", "snap", "flatpak"}
 _PKG_ACTIONS = {"install", "remove", "purge"}
 _NAME_ONLY_ACTIONS = {"autoremove", "update", "upgrade"}
 _SAFE_ARG = re.compile(r"^[A-Za-z0-9/.][A-Za-z0-9+._:/=,-]*$")
-# Flags that turn off apt's or dpkg's own safety checks. SLPM asks the user to confirm
-# instead, so these must never reach a privileged package tool.
-_FORBIDDEN_FLAGS = {
-    "--force-yes", "-y--force-yes", "--force-all", "--force-remove-essential",
-    "--force-depends", "--force-architecture", "--allow-change-held-packages",
-}
+# The exact flags each privileged command shape uses - and nothing else. A denylist of
+# dangerous flags can never be complete: apt and dpkg both accept -o, and through it a
+# caller can point apt at a caller-chosen file, or hand it a script to run as root
+# (DPkg::Pre-Install-Pkgs). Every flag below is one SLPM itself sends; a new one has to
+# be added here deliberately, where it can be read.
+_APT_GET_FLAGS = {"-y", "-f", "--allow-downgrades"}
+_DPKG_FLAGS = set()
+_SNAP_FLAGS = set()
 
-# The one exception, and it is deliberately narrow: Advanced Mode offers removal for
-# every package, so removing an Essential one has to be expressible. apt refuses those
-# removals outright without this flag. It is accepted only on a removal action - never
-# on an install, where it would defeat a different check - and it forces nothing else:
-# dpkg's --force-* flags stay refused above.
+# The one flag outside that list, and it is deliberately narrow: Advanced Mode offers
+# removal for every package, so removing an Essential one has to be expressible. apt
+# refuses those removals outright without it. It is accepted only on a removal action -
+# never on an install or an update, where it would defeat a different check.
 _ALLOW_REMOVE_ESSENTIAL = "--allow-remove-essential"
 _REMOVAL_ACTIONS = {"remove", "purge", "-r", "--remove", "-P", "--purge"}
-
-
-def _safe_flag(arg):
-    """Any flag that is not --allow-remove-essential is judged by the forbidden list.
-
-    The exception is decided in _safe_args, which knows whether the action is a removal;
-    this function must not wave it through on its own, or it would also be accepted on
-    install and update.
-    """
-    if arg == _ALLOW_REMOVE_ESSENTIAL:
-        return False
-    return not any(arg.startswith(f) for f in _FORBIDDEN_FLAGS)
 
 
 def _safe_operand(arg):
@@ -261,17 +281,20 @@ def _safe_operand(arg):
     return bool(_SAFE_ARG.match(arg))
 
 
-def _safe_args(rest, require_operand=False, allow_remove_essential=False):
+def _safe_args(rest, require_operand=False, allow_remove_essential=False,
+               flags=frozenset()):
     if require_operand and not any(not a.startswith("-") for a in rest):
         return False
     for a in rest:
         if a.startswith("-"):
-            if _safe_flag(a):
-                continue
             # The single sanctioned exception, and only where a removal is happening.
-            if allow_remove_essential and a == _ALLOW_REMOVE_ESSENTIAL:
-                continue
-            return False
+            if a == _ALLOW_REMOVE_ESSENTIAL:
+                if allow_remove_essential:
+                    continue
+                return False
+            if a not in flags:
+                return False
+            continue
         if not _safe_operand(a):
             return False
     return True
@@ -290,25 +313,36 @@ def _allowed(argv):
             # e.g. apt-get remove -y vlc  /  apt-get install -y /tmp/app.deb
             # "install -f -y" is the dependency repair pass: flags only, no target.
             if not any(not a.startswith("-") for a in rest):
-                return _safe_args(rest, allow_remove_essential=removal)
-            return _safe_args(rest, require_operand=True, allow_remove_essential=removal)
+                return _safe_args(rest, allow_remove_essential=removal,
+                                  flags=_APT_GET_FLAGS)
+            return _safe_args(rest, require_operand=True,
+                              allow_remove_essential=removal, flags=_APT_GET_FLAGS)
         if action in _NAME_ONLY_ACTIONS:
-            return _safe_args(rest)
+            return _safe_args(rest, flags=_APT_GET_FLAGS)
         return False
 
     if program == "dpkg":
+        # Only the shapes the UI sends. SLPM repairs a broken install through
+        # "apt-get install -f -y", so there is no dpkg recovery shape to allow.
         if action in {"-i", "--install", "-r", "--remove", "-P", "--purge"}:
-            return _safe_args(rest, require_operand=True, allow_remove_essential=removal)
-        if action == "--configure":
-            return _safe_args(rest)
+            return _safe_args(rest, require_operand=True,
+                              allow_remove_essential=removal, flags=_DPKG_FLAGS)
         return False
 
     if program == "snap":
-        if action in {"remove", "refresh"}:
-            return _safe_args(rest, require_operand=True)
-        if action == "install":
-            return _safe_args(rest, require_operand=True)
+        if action in {"remove", "install"}:
+            return _safe_args(rest, require_operand=True, flags=_SNAP_FLAGS)
+        if action == "refresh":
+            # `snap refresh` with no operand refreshes every snap - that is the form
+            # SLPM sends, so it must not be refused as operand-less.
+            return _safe_args(rest, flags=_SNAP_FLAGS)
         return False
+
+    # No flatpak branch on purpose: SLPM's flatpak operations run at user level
+    # (per-user installation), which needs no root. Running flatpak as root would
+    # install into the *system* installation, an app the user could not remove again
+    # through this UI - so a root flatpak is not something the UI should be able to
+    # ask for at all.
 
     return False
 

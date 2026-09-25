@@ -103,10 +103,13 @@ _FA = {
         "اسکریپت‌های نصب می‌توانند هر دستوری را اجرا کنند. SLPM هیچ فایلی را استخراج "
         "نمی‌کند و فقط پیشنهاد می‌کند اسکریپت را به‌عنوان میان‌بر منو ثبت کنید.",
     "Unsupported file type": "نوع فایل پشتیبانی نمی‌شود",
-    "SLPM installs .deb, .AppImage, .flatpakref and archives "
+    "SLPM installs .deb, .AppImage, .flatpakref, .snap and archives "
     "({formats}). Convert this file first.":
-        "SLPM فایل‌های .deb، .AppImage، .flatpakref و آرشیوهای ({formats}) را نصب "
-        "می‌کند. ابتدا این فایل را تبدیل کنید.",
+        "SLPM فایل‌های .deb، .AppImage، .flatpakref، .snap و آرشیوهای ({formats}) را "
+        "نصب می‌کند. ابتدا این فایل را تبدیل کنید.",
+    "Snap package": "بستهٔ Snap",
+    "Will be installed with snap.": "با snap نصب می‌شود.",
+    "This file is not a .snap package.": "این فایل یک بستهٔ .snap نیست.",
 
     "Installation failed": "نصب انجام نشد",
     "Installation failed\n{detail}": "نصب انجام نشد\n{detail}",
@@ -171,12 +174,27 @@ _FA = {
     "This archive format needs the '7z' tool, which is not installed.":
         "این قالب آرشیو به ابزار 7z نیاز دارد که نصب نیست.",
     "Extraction failed.": "استخراج انجام نشد.",
+    "The archive contains paths that would be written outside the destination "
+    "folder.":
+        "این آرشیو شامل مسیرهایی است که فایل‌ها را بیرون از پوشهٔ مقصد می‌نویسند؛ "
+        "برای همین استخراج نشد.",
+    "The archive could not be extracted safely.":
+        "این آرشیو به‌شکل امنی قابل استخراج نیست.",
 
     # ----------------------------------------------------------------------- apt
     "{name} was removed.": "{name} حذف شد.",
     "{name} was purged.": "{name} حذف و پاک‌سازی شد.",
     "Could not remove {name}.": "{name} حذف نشد.",
     "Could not purge {name}.": "{name} پاک‌سازی نشد.",
+    "This does not look like a package name: {name}":
+        "این شبیه نام یک بسته نیست: {name}",
+    "{name} was installed.": "{name} نصب شد.",
+    "Could not install {name}.": "{name} نصب نشد.",
+    "Installing {name}": "در حال نصب {name}",
+    "Package lists were refreshed.": "فهرست بسته‌ها تازه شد.",
+    "Refreshing the package lists failed.": "تازه‌کردن فهرست بسته‌ها انجام نشد.",
+    "System packages were updated.": "بسته‌های سیستمی به‌روز شدند.",
+    "Updating the system packages failed.": "به‌روزرسانی بسته‌های سیستمی انجام نشد.",
     "The package could not be installed. It may be built for a different distribution "
     "or architecture.\n{detail}":
         "بسته نصب نشد. ممکن است برای توزیع یا معماری دیگری ساخته شده باشد.\n{detail}",
@@ -199,6 +217,18 @@ _FA = {
     # ----------------------------------------------------- flatpak / snap / misc
     "{app_id} was removed.": "{app_id} حذف شد.",
     "Could not remove {app_id}.": "{app_id} حذف نشد.",
+    "This does not look like a Flatpak app id (org.gimp.GIMP).":
+        "این شبیه شناسهٔ Flatpak نیست (مثل org.gimp.GIMP).",
+    "This does not look like a snap name: {name}":
+        "این شبیه نام snap نیست: {name}",
+    "Flatpak is not installed on this system.": "Flatpak روی این سیستم نصب نیست.",
+    "Snap is not installed on this system.": "Snap روی این سیستم نصب نیست.",
+    "{app_id} was installed.": "{app_id} نصب شد.",
+    "Could not install {app_id}.": "{app_id} نصب نشد.",
+    "Flatpak apps were updated.": "برنامه‌های Flatpak به‌روز شدند.",
+    "Updating Flatpak apps failed.": "به‌روزرسانی برنامه‌های Flatpak انجام نشد.",
+    "Snap apps were updated.": "برنامه‌های Snap به‌روز شدند.",
+    "Updating snap apps failed.": "به‌روزرسانی برنامه‌های Snap انجام نشد.",
     "(no description)": "(بدون توضیح)",
     "Installed application": "برنامهٔ نصب‌شده",
     "Extracted.": "استخراج شد.",
@@ -290,6 +320,8 @@ _FA = {
         "برنامه‌های قابل‌حمل. در ~/Applications کپی می‌شوند و میان‌بری در منو می‌گیرند.",
     "Flatpak apps, when Flatpak is installed.":
         "برنامه‌های Flatpak، در صورت نصب Flatpak.",
+    "Snap packages, when Snap is installed.":
+        "بسته‌های snap، در صورت نصب snap.",
     "Archives. Extracted to a managed folder, then you choose what to add to the "
     "menu.":
         "آرشیوها. در پوشه‌ای که SLPM مدیریت می‌کند استخراج می‌شوند؛ سپس می‌توانید "
@@ -303,6 +335,7 @@ _FA = {
         "می‌کند فایل را تشخیص دهد و نصب کند؛ مگر فایل دیگری انتخاب شده باشد.",
     "Download": "دانلود",
     "Downloads": "دانلودها",
+    "Download link": "لینک دانلود",
     "Paste a download link, like https://example.com/app.AppImage":
         "لینک دانلودی مثل https://example.com/app.AppImage بچسبانید",
     "Saved to Downloads, then pointed at the installer above.":
@@ -314,6 +347,8 @@ _FA = {
     "in progress": "در حال انجام",
     "Enter a link starting with http:// or https://":
         "لینکی را وارد کنید که با http:// یا https:// شروع شود.",
+    "This link points at a local or reserved address, so SLPM will not download it.":
+        "این لینک به نشانی محلی یا رزروشده اشاره دارد؛ SLPM آن را دانلود نمی‌کند.",
     "Download failed.": "دانلود انجام نشد.",
     "Unknown action.": "عملیات ناشناخته.",
     "That download is no longer running.": "این دانلود دیگر در حال اجرا نیست.",
@@ -402,4 +437,42 @@ _FA = {
     "No startup apps added yet. Switch to Advanced Mode to see system startup apps.":
         "هنوز برنامهٔ استارتاپ اضافه نکرده‌اید. برای دیدن برنامه‌های استارتاپ سیستم، به حالت پیشرفته بروید.",
     "No startup apps matched.": "برنامهٔ استارتاپ پیدا نشد.",
+
+    # ----------------------------------------------------------------- updates
+    "Updates": "به‌روزرسانی‌ها",
+    "Available updates on this computer.":
+        "به‌روزرسانی‌های موجود روی این رایانه.",
+    "System packages (apt)": "بسته‌های سیستمی (apt)",
+    "Flatpak apps": "برنامه‌های Flatpak",
+    "Snap apps": "برنامه‌های Snap",
+    "{count} packages can be updated.": "{count} بسته قابل به‌روزرسانی است.",
+    "{count} apps can be updated.": "{count} برنامه قابل به‌روزرسانی است.",
+    "All system packages are up to date.": "همهٔ بسته‌های سیستمی به‌روز هستند.",
+    "All Flatpak apps are up to date.": "همهٔ برنامه‌های Flatpak به‌روز هستند.",
+    "All snap apps are up to date.": "همهٔ برنامه‌های Snap به‌روز هستند.",
+    "No updates found.": "به‌روزرسانی‌ای پیدا نشد.",
+    "Refresh package lists": "تازه‌کردن فهرست بسته‌ها",
+    "Update all system packages": "به‌روزرسانی همهٔ بسته‌های سیستمی",
+    "Update all Flatpak apps": "به‌روزرسانی همهٔ برنامه‌های Flatpak",
+    "Update all snap apps": "به‌روزرسانی همهٔ برنامه‌های Snap",
+    "Updating {name}…": "در حال به‌روزرسانی {name}…",
+    "{name} was updated.": "{name} به‌روزرسانی شد.",
+    "Updating {name} failed.": "به‌روزرسانی {name} ناموفق بود.",
+    "Updating…": "در حال به‌روزرسانی…",
+    "Looking for updates…": "در حال جست‌وجوی به‌روزرسانی‌ها…",
+    "SLPM will ask for your administrator password.":
+        "SLPM رمز عبور مدیر سیستم را خواهد خواست.",
+    "This manager is not installed on this system.":
+        "این مدیر بسته روی این رایانه نصب نیست.",
+
+    # -------------------------------------------------------- install by name
+    "Install a package": "نصب یک بسته",
+    "Install by name from a package manager. This works in Advanced Mode only.":
+        "نصب با نام از مدیر بسته. فقط در حالت پیشرفته کار می‌کند.",
+    "Package manager": "مدیر بسته",
+    "Package name, like vlc": "نام بسته، مثل vlc",
+    "Flatpak app id, like org.gimp.GIMP": "شناسهٔ Flatpak، مثل org.gimp.GIMP",
+    "Snap name, like code": "نام snap، مثل code",
+    "Searching…": "در حال جست‌وجو…",
+    "No packages matched.": "بسته‌ای مطابق پیدا نشد.",
 }

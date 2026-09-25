@@ -13,6 +13,11 @@ const state = {
   source: 'all',
 };
 
+/* The render cap on list rows. One DOM row per item is fine at a few hundred; past
+   six hundred the page gets heavy for no visible gain, so the rest stay one
+   narrowed search away. */
+const MAX_ROWS = 600;
+
 const listEl = $('#list');
 const loader = $('#loader');
 const empty = $('#empty');
@@ -40,6 +45,8 @@ function applyModeChrome() {
     : T('Only the apps you installed yourself. Switch to Advanced Mode to see apt/dpkg packages.');
   // The source filter is shown only with the apt/dpkg package list.
   $('#filter').classList.toggle('hidden', !advanced);
+  // Install by name is a repository act, so the card belongs to the advanced view.
+  $('#install-box').classList.toggle('hidden', !advanced);
 }
 
 /* app.js already wired the buttons to SLPM.setMode, which asks before entering
@@ -96,9 +103,9 @@ function render() {
   }
   empty.classList.add('hidden');
   const frag = document.createDocumentFragment();
-  items.slice(0, 600).forEach(item => frag.appendChild(row(item)));
+  items.slice(0, MAX_ROWS).forEach(item => frag.appendChild(row(item)));
   listEl.appendChild(frag);
-  if (items.length > 600) {
+  if (items.length > MAX_ROWS) {
     const more = document.createElement('p');
     more.className = 'muted small';
     more.textContent = T('Showing the first 600 of {n} items — narrow the search to see the rest.', { n: items.length });
@@ -383,6 +390,86 @@ $('#cleanup').onclick = () => {
     ]
   });
 };
+
+/* ---------------------------------------------------------- install by name
+
+   The card lives in the template and is shown by applyModeChrome in Advanced Mode.
+   apt is the only manager with a search endpoint, so the suggestion list appears
+   only while apt is selected; snap and flatpak installs take the typed name and are
+   shape-checked on the server. */
+
+const pkgManager = $('#pkg-manager');
+const pkgName = $('#pkg-name');
+const pkgInstall = $('#pkg-install');
+const pkgResults = $('#pkg-search-results');
+
+/* The placeholder names the shape the selected manager expects, so a wrong-shape
+   name is noticed before it is sent. */
+const PKG_PLACEHOLDERS = {
+  apt: T('Package name, like vlc'),
+  snap: T('Snap name, like code'),
+  flatpak: T('Flatpak app id, like org.gimp.GIMP'),
+};
+
+function syncPkgBox() {
+  pkgName.placeholder = PKG_PLACEHOLDERS[pkgManager.value] || '';
+  pkgInstall.disabled = !pkgName.value.trim();
+  if (pkgManager.value !== 'apt') pkgResults.innerHTML = '';
+}
+
+function paintSearchResults(results) {
+  pkgResults.innerHTML = '';
+  if (!results.length) {
+    const p = document.createElement('p');
+    p.className = 'small muted';
+    p.textContent = T('No packages matched.');
+    pkgResults.appendChild(p);
+    return;
+  }
+  results.slice(0, 20).forEach(res => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'choice';
+    b.innerHTML = `<strong></strong><small></small>`;
+    $('strong', b).textContent = res.name;
+    $('small', b).textContent = res.summary;
+    b.onclick = () => {
+      pkgName.value = res.name;
+      pkgInstall.disabled = false;
+      pkgResults.innerHTML = '';
+    };
+    pkgResults.appendChild(b);
+  });
+}
+
+let pkgSearchTimer;
+pkgName.addEventListener('input', () => {
+  syncPkgBox();
+  clearTimeout(pkgSearchTimer);
+  const q = pkgName.value.trim();
+  if (pkgManager.value !== 'apt' || q.length < 2) { pkgResults.innerHTML = ''; return; }
+  pkgResults.innerHTML = `<p class="small muted">${esc(T('Searching…'))}</p>`;
+  pkgSearchTimer = setTimeout(async () => {
+    const r = await api(`/api/apt/search?q=${encodeURIComponent(q)}`);
+    // A newer keystroke may have started its own search; only the latest paints.
+    if (r.ok && pkgName.value.trim() === q) paintSearchResults(r.results || []);
+    else pkgResults.innerHTML = '';
+  }, 250);
+});
+
+pkgManager.addEventListener('change', syncPkgBox);
+
+pkgInstall.onclick = async () => {
+  const name = pkgName.value.trim();
+  if (!name || pkgInstall.disabled) return;
+  pkgInstall.disabled = true;
+  const r = await api('/api/packages/install', { manager: pkgManager.value, name });
+  pkgInstall.disabled = false;
+  if (r.ok) { toast(T('Done'), r.message, 'ok'); load(); }
+  else toast(T('Failed'), [r.message, r.detail].filter(Boolean).join(' '), 'bad');
+};
+
+syncPkgBox();
 
 /* The page opens in whatever mode the server rendered (see base.html), so the chrome
    has to follow that before the first load rather than assuming simple. */

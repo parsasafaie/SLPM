@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}{{ t('Updates') }} - SLPM{% endblock %}
+
+{% block content %}
+<section class="hero row-between">
+  <div>
+    <h2>{{ t('Updates') }}</h2>
+    <p class="muted">{{ t('Available updates on this computer.') }}</p>
+  </div>
+  <button class="btn btn-ghost" id="refresh">{{ t('Refresh') }}</button>
+</section>
+
+{# One card per manager that can report upgradable items. The template owns the
+   headings and the buttons, so they render in the page's language before any
+   JavaScript runs; updates.js fills the counts, the lists and the busy state from
+   /api/updates. apt gets an extra button because its package lists need refreshing
+   before an upgrade can know anything new. The data-* strings hold the sentence
+   variants the script swaps in (count vs. up to date vs. not installed), rendered
+   server-side so they follow the page language without a second catalog. #}
+{% for card in [
+  {'mgr': 'apt', 'title': t('System packages (apt)'),
+   'empty': t('All system packages are up to date.'),
+   'count': t('{count} packages can be updated.'),
+   'buttons': [
+     {'id': 'refresh', 'kind': 'ghost', 'label': t('Refresh package lists')},
+     {'id': 'update', 'kind': 'primary', 'label': t('Update all system packages')}
+   ]},
+  {'mgr': 'flatpak', 'title': t('Flatpak apps'),
+   'empty': t('All Flatpak apps are up to date.'),
+   'count': t('{count} apps can be updated.'),
+   'buttons': [
+     {'id': 'update', 'kind': 'primary', 'label': t('Update all Flatpak apps')}
+   ]},
+  {'mgr': 'snap', 'title': t('Snap apps'),
+   'empty': t('All snap apps are up to date.'),
+   'count': t('{count} apps can be updated.'),
+   'buttons': [
+     {'id': 'update', 'kind': 'primary', 'label': t('Update all snap apps')}
+   ]},
+] %}
+<div class="card" id="card-{{ card.mgr }}" data-empty="{{ card.empty }}" data-count="{{ card.count }}">
+  <div class="row-between">
+    <h3>{{ card.title }}</h3>
+    <div class="row head-controls">
+      <span class="pill hidden" id="count-{{ card.mgr }}"></span>
+      {# Downward chevron: appears only while this manager has something to update,
+         and toggles the list of those items under the card. JS owns the label and
+         the expanded state; the template keeps the skeleton in the page language. #}
+      <button type="button" class="chevron-btn hidden" id="toggle-{{ card.mgr }}"
+              aria-expanded="false" aria-controls="list-{{ card.mgr }}">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9.5l6 6 6-6"/></svg>
+      </button>
+    </div>
+  </div>
+  <p class="muted small" id="avail-{{ card.mgr }}"></p>
+  <div id="list-{{ card.mgr }}" class="updates-list"></div>
+  <div class="row gap">
+    {% for b in card.buttons %}
+    <button class="btn {{ 'btn-' + b.kind }}" id="run-{{ card.mgr }}-{{ b.id }}">{{ b.label }}</button>
+    {% endfor %}
+  </div>
+</div>
+{% endfor %}
+
+<div id="loader" class="loader hidden"><div class="spinner"></div><span>{{ t('Looking for updates…') }}</span></div>
+{% endblock %}
+
+{% block scripts %}<script src="{{ url_for('static', filename='js/updates.js') }}"></script>{% endblock %}

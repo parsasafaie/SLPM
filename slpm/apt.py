@@ -4,12 +4,8 @@ from functools import lru_cache
 from pathlib import Path
 
 from . import proc
-from .i18n import tr as _tr
 
-
-def _t(english, **values):
-    """Translate a message into the language of the request being served."""
-    return _tr(proc.lang(), english, **values)
+_t = proc.t
 
 
 HEADER = {"Package", "Status", "Version", "Architecture", "Maintainer", "Installed-Size",
@@ -181,7 +177,90 @@ def install_deb(path):
     return True, _t("Installed."), steps
 
 
+def _bad_name(name):
+    """A name that is not a valid apt package name is refused before it is ever put
+    on a command line, on any privilege path."""
+    return not proc.is_apt_pkg(name)
+
+
+def install_name(name):
+    """Install a package by its repository name (not a file)."""
+    if _bad_name(name):
+        return False, _t("This does not look like a package name: {name}", name=name), ""
+    rc, out, err = proc.privileged(["apt-get", "install", "-y", name])
+    if rc == 0:
+        return True, _t("{name} was installed.", name=name), ""
+    if rc == -2:
+        return False, _t("Could not install {name}.", name=name), \
+            err or _t("No details reported.")
+    return False, _t("Could not install {name}.", name=name), _apt_reason(out, err)
+
+
+def refresh_lists():
+    """apt-get update: refresh what the repositories offer."""
+    return proc.privileged(["apt-get", "update"])
+
+
+def do_upgrade():
+    """apt-get upgrade: bring every installed package to the newest offered version."""
+    return proc.privileged(["apt-get", "upgrade", "-y"])
+
+
+def upgrade_one(name, version=""):
+    """Bring one installed package to the version the repositories offer.
+
+    The version is pinned when it is known, so the click upgrades exactly the row that
+    was on screen; if the mirrors moved on in the meantime the install fails and the
+    user refreshes, instead of a different version being installed silently.
+    """
+    if _bad_name(name):
+        return False, _t("This does not look like a package name: {name}", name=name), ""
+    target = f"{name}={version}" if version else name
+    rc, out, err = proc.privileged(["apt-get", "install", "-y", target])
+    if rc == 0:
+        return True, _t("{name} was updated.", name=name), ""
+    if rc == -2:
+        return False, _t("Updating {name} failed.", name=name), \
+            err or _t("No details reported.")
+    return False, _t("Updating {name} failed.", name=name), _apt_reason(out, err)
+
+
+# The simulation's action lines carry name, installed version in brackets and offered
+# version in parentheses:  Inst dnsmasq-base [2.92-1] (2.92-1ubuntu0.4 Suite ... [arch])
+# Older apt prefixes the verb with a sequence number (Inst:1), newer apt does not.
+# These are the only lines that state both sides of every upgrade, so they are what
+# is parsed; the "The following packages will be upgraded:" name list carries no
+# versions and wraps differently between apt releases.
+_UPGRADE_INST = re.compile(r"^Inst:?\d*\s+(\S+)\s+\[(\S+)\]\s+\((\S+)")
+
+
+def parse_upgrade_sim(text):
+    """The upgrades from an `apt-get upgrade -s` simulation transcript."""
+    upgrades = []
+    for line in (text or "").splitlines():
+        m = _UPGRADE_INST.match(line)
+        if m:
+            upgrades.append({
+                "name": m.group(1).split(":")[0],
+                "current": m.group(2),
+                "available": m.group(3),
+            })
+    return upgrades
+
+
+def list_upgrades():
+    """Which installed packages have a newer version, as a dry run.
+
+    `apt-get upgrade -s` is read-only and needs no privileges. The locale is pinned
+    to C (proc.run sets LANG), so the transcript is stable English.
+    """
+    rc, out, _ = proc.run(["apt-get", "upgrade", "-s"], timeout=120)
+    return parse_upgrade_sim(out)
+
+
 def uninstall(name):
+    if _bad_name(name):
+        return False, _t("This does not look like a package name: {name}", name=name), ""
     rc, out, err = proc.privileged(["apt-get", "remove", "-y", *_essential_flag(name), name])
     if rc == 0:
         return True, _t("{name} was removed.", name=name), ""
@@ -194,6 +273,8 @@ def uninstall(name):
 
 
 def purge(name):
+    if _bad_name(name):
+        return False, _t("This does not look like a package name: {name}", name=name), ""
     rc, out, err = proc.privileged(["apt-get", "purge", "-y", *_essential_flag(name), name])
     if rc == 0:
         return True, _t("{name} was purged.", name=name), ""

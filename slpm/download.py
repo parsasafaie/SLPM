@@ -10,8 +10,10 @@ Resume works through the HTTP Range header: the connection is reopened with
 already on disk, instead of starting over.
 """
 import contextvars
+import ipaddress
 import os
 import re
+import socket
 import threading
 import time
 import urllib.error
@@ -59,9 +61,75 @@ def _downloads_dir():
 
 
 def _filename_from_url(url):
-    """Guess a file name from the end of the URL, or a generic default."""
-    name = unquote(urlparse(url).path.rsplit("/", 1)[-1]).strip()
-    return name if name and "." in name else "download"
+    """Guess a file name from the end of the URL, or a generic default.
+
+    The URL is decoded *before* the last path segment is taken, and the result is
+    reduced to a bare file name: an encoded separator (%2F) is what re-introduced
+    slashes after the split and turned "download the file at …/evil" into a write
+    to an attacker-chosen path. What is left must be a plain name - no directory,
+    no leading dot (a dotfile could hide a file, and "." and ".." are not names at
+    all).
+    """
+    name = unquote(urlparse(url).path).rsplit("/", 1)[-1].strip()
+    name = Path(name).name
+    if not name or name in (".", "..") or name.startswith("."):
+        return "download"
+    return name if "." in name else "download"
+
+
+class _CappingRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """urllib follows redirects without a count; a pair of servers that redirect
+    at each other would loop the job until the per-read timeout. Cap the hops."""
+
+    def __init__(self, limit):
+        self.limit = limit
+        self._count = 0
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        self._count += 1
+        if self._count > self.limit:
+            raise urllib.error.HTTPError(newurl, code, "Too many redirects", headers, fp)
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+def _opener():
+    return urllib.request.build_opener(_CappingRedirectHandler(MAX_REDIRECTS))
+
+
+def _is_blocked_ip(ip):
+    return (ip.is_loopback or ip.is_link_local or ip.is_private
+            or ip.is_reserved or ip.is_unspecified)
+
+
+def _blocked_host(hostname):
+    """True when a URL points at this machine or the local network rather than the
+    internet.
+
+    The download endpoint runs with the user's rights and follows redirects, so a
+    link to 127.0.0.1, the cloud metadata address or a router on the LAN would be a
+    way to probe - and pull data from - services the user has no business talking to.
+    Every address a name resolves to is checked; if one of them is private, the name
+    is blocked.
+    """
+    if not hostname:
+        return True
+    host = hostname.strip("[]")  # bracketed IPv6 literal
+    try:
+        return _is_blocked_ip(ipaddress.ip_address(host))
+    except ValueError:
+        pass
+    try:
+        addrs = socket.getaddrinfo(host, None)
+    except OSError:
+        return True  # a name that does not resolve is not a safe target either
+    for entry in addrs:
+        try:
+            ip = ipaddress.ip_address(entry[4][0])
+        except ValueError:
+            return True
+        if _is_blocked_ip(ip):
+            return True
+    return False
 
 
 def _unique_path(dest):
@@ -87,6 +155,7 @@ class DownloadJob:
         self.downloaded = 0
         self.total = None
         self.error = ""
+        self.finished_at = None       # set when the job leaves queued/running/paused
         self.filename = _filename_from_url(url)
         dest = _downloads_dir() / self.filename
         try:
@@ -133,6 +202,7 @@ class DownloadJob:
             if reason == "done":
                 with self._lock:
                     self.state = "done"
+                    self.finished_at = time.time()
                 return
             if reason == "failed":
                 # self.state is already "failed" (and self.error set) inside the
@@ -153,7 +223,7 @@ class DownloadJob:
             req = urllib.request.Request(self.url)
             if pos > 0:
                 req.add_header("Range", f"bytes={pos}-")
-            resp = urllib.request.urlopen(req, timeout=CONNECT_TIMEOUT)
+            resp = _opener().open(req, timeout=CONNECT_TIMEOUT)
         except urllib.error.HTTPError as exc:
             # A 416 means the server does not support range resumes; restart the
             # whole file fresh (truncating the partial) rather than append twice.
@@ -165,6 +235,7 @@ class DownloadJob:
                 return self._download_once()
             with self._lock:
                 self.state = "failed"
+                self.finished_at = time.time()
                 self.error = _t("Download failed.")
             return "failed"
         except (urllib.error.URLError, OSError) as exc:
@@ -173,6 +244,7 @@ class DownloadJob:
             # and leaving the job stranded in "queued".
             with self._lock:
                 self.state = "failed"
+                self.finished_at = time.time()
                 self.error = _t("Download failed.")
             return "failed"
 
@@ -218,6 +290,7 @@ class DownloadJob:
         except (urllib.error.URLError, OSError, ValueError) as exc:
             with self._lock:
                 self.state = "failed"
+                self.finished_at = time.time()
                 self.error = _t("Download failed.")
             return "failed"
         finally:
@@ -239,6 +312,7 @@ class DownloadJob:
     def stop(self):
         with self._lock:
             self.state = "stopped"
+            self.finished_at = time.time()
         # Removing the partial file is safe: the thread checks the state under the
         # same lock before every write, so no chunk is written after this returns.
         try:
@@ -252,6 +326,12 @@ def start(url):
     url = str(url or "").strip()
     if not re.match(r"^https?://[^\s]+$", url):
         return {"ok": False, "error": _t("Enter a link starting with http:// or https://")}
+    # The destination is checked before the job is created, so a blocked link never
+    # even touches the filesystem.
+    if _blocked_host(urlparse(url).hostname):
+        return {"ok": False,
+                "error": _t("This link points at a local or reserved address, so SLPM "
+                            "will not download it.")}
     job = DownloadJob(url)
     with _jobs_lock:
         _jobs[job.id] = job
@@ -277,5 +357,17 @@ def control(job_id, action):
 
 
 def list_status():
+    """Every job, with the oldest finished ones pruned.
+
+    The page polls this once a second, so a finished row has already been drawn
+    before it is dropped; keeping only the newest KEEP_FINISHED finished jobs stops
+    the table (and the memory it costs) growing for the life of the server.
+    """
     with _jobs_lock:
+        finished = [j for j in _jobs.values()
+                    if j.state in ("done", "failed", "stopped")]
+        if len(finished) > KEEP_FINISHED:
+            finished.sort(key=lambda j: j.finished_at or 0)
+            for j in finished[: len(finished) - KEEP_FINISHED]:
+                _jobs.pop(j.id, None)
         return [job.status() for job in _jobs.values()]

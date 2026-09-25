@@ -1,0 +1,38 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests
+  cancel-in-progress: true
+
+jobs:
+  selftest:
+    # 3.12 is the current LTS default; 3.14 is where this project is developed.
+    # The two are worth keeping honest against each other (the stdlib tarfile
+    # constructor changed between them, and the selftest exercises it).
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.14"]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      # --skip-machine: on a clean runner "the user installed apps" is simply not
+      # true, so the checks that read this machine's dpkg log and app list are
+      # skipped. Everything else - parsing, allowlist, refusal behaviour, the
+      # browser catalog - runs exactly as it does on a developer machine.
+      - name: Run selftest
+        run: python selftest.py --skip-machine

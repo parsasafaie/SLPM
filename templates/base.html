@@ -12,6 +12,10 @@
 (function () {
   var m = document.cookie.match(/(?:^|;\s*)slpm_theme=(dark|light)/);
   if (m) document.documentElement.dataset.theme = m[1];
+  /* No stored choice yet: follow the operating system's own dark setting instead of
+     assuming light, so a dark-mode desktop never gets a white flash on first visit. */
+  else if (window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches)
+    document.documentElement.dataset.theme = "dark";
 })();
 </script>
 </head>
@@ -28,11 +32,13 @@
     <a href="{{ url_for('page_install') }}" class="tab {{ 'active' if page == 'install' }}">{{ t('Install') }}</a>
     <a href="{{ url_for('page_apps') }}" class="tab {{ 'active' if page == 'apps' }}">{{ t('Installed Apps') }}</a>
     <a href="{{ url_for('page_startup') }}" class="tab {{ 'active' if page == 'startup' }}">{{ t('Startup Apps') }}</a>
+    <a href="{{ url_for('page_updates') }}" class="tab {{ 'active' if page == 'updates' }}">{{ t('Updates') }}</a>
     {# The Simple/Advanced switch lives in the tab row because it is not a property of
        one tab: it decides what the whole app treats as yours, and it stays put while
-       you move between the tabs it applies to. The Install tab has nothing to switch -
-       installing a file works the same either way - so the control is not rendered
-       there at all rather than sitting there doing nothing. #}
+       you move between the tabs it applies to. The Install and Updates tabs have
+       nothing to switch - installing a file and updating what is already installed
+       work the same in either mode - so the control is not rendered there at all
+       rather than sitting there doing nothing. #}
     {% if page in ('apps', 'startup') %}
     <div class="mode-switch" role="group" aria-label="{{ t('View mode') }}">
       <button type="button" class="mode-btn {{ 'active' if mode == 'simple' }}"
@@ -73,7 +79,7 @@
   {% block content %}{% endblock %}
 </main>
 
-<div id="toasts" class="toasts"></div>
+<div id="toasts" class="toasts" role="status" aria-live="polite"></div>
 <div id="overlay" class="overlay hidden">
   <div class="modal" id="modal"></div>
 </div>

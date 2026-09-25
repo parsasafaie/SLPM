@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 """SLPM - Simple Linux Package Manager. Flask entry point."""
 import io
+import logging
 import os
-import shutil
 import sys
 import threading
-import traceback
 from pathlib import Path
 
 from flask import Flask, jsonify, make_response, render_template, request, send_file
@@ -13,8 +12,10 @@ from flask import Flask, jsonify, make_response, render_template, request, send_
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from slpm import apps as apps_mod
-from slpm import (appimage, apt, autostart, desktop, flatpak_snap, download, helper,
+from slpm import (apt, autostart, desktop, flatpak_snap, download, helper,
                   installer, i18n, proc, state)
+
+log = logging.getLogger("slpm")
 
 app = Flask(__name__)
 app.config["JSON_SORT_KEYS"] = False
@@ -22,13 +23,9 @@ app.config["JSON_SORT_KEYS"] = False
 app.config["MAX_CONTENT_LENGTH"] = 256 * 1024
 # Flask >= 3.1 rejects requests whose Host header is not in this list. Without it a
 # page on another origin can reach the local server through DNS rebinding, and every
-# endpoint here acts on the user's machine.
-try:
-    from werkzeug.middleware.proxy_fix import ProxyFix  # noqa: F401  (optional)
-
-    app.config["TRUSTED_HOSTS"] = ["127.0.0.1", "localhost", "[::1]", "::1"]
-except Exception:
-    pass
+# endpoint here acts on the user's machine. (On an older Flask the key is simply
+# ignored, which is why requirements pins Flask >= 3.1.)
+app.config["TRUSTED_HOSTS"] = ["127.0.0.1", "localhost", "[::1]", "::1"]
 
 LANG_COOKIE = "slpm_lang"
 THEME_COOKIE = "slpm_theme"
@@ -126,10 +123,14 @@ def api_prefs():
 # ------------------------------------------------------------------ helpers
 
 def _err(exc):
-    """Never leak a traceback to the UI; log it and return an explanation."""
-    traceback.print_exc()
-    return jsonify({"ok": False, "message": proc.t("SLPM hit an unexpected problem."),
-                    "detail": str(exc)}), 500
+    """Never leak a traceback to the UI; log it and return an explanation.
+
+    The exception text goes to the log only: it may carry paths or tool output that
+    says nothing to the person looking at the page, and the log is where a developer
+    fixing the bug will look.
+    """
+    log.exception("SLPM request failed")
+    return jsonify({"ok": False, "message": proc.t("SLPM hit an unexpected problem.")}), 500
 
 
 def _busy_reply():
@@ -153,6 +154,11 @@ def page_apps():
 @app.route("/startup")
 def page_startup():
     return render_template("startup.html", page="startup", env=_env())
+
+
+@app.route("/updates")
+def page_updates():
+    return render_template("updates.html", page="updates", env=_env())
 
 
 def _env():
@@ -193,9 +199,11 @@ def api_detect():
 @app.post("/api/install")
 def api_install():
     data = request.json or {}
-    if _job["active"]:
-        return _busy_reply()
     with _install_lock:
+        # The flag and the work that guards it must be decided under the same lock:
+        # two requests that both read the flag first would otherwise both start.
+        if _job["active"]:
+            return _busy_reply()
         _job.update(active=True, label=proc.t("Installation"))
         try:
             result = installer.install(data.get("path", ""), data.get("opts") or {})
@@ -206,6 +214,7 @@ def api_install():
         finally:
             _job.update(active=False, label="")
             apps_mod.bust_meta_cache()
+            desktop.bust_collect_cache()
 
 
 @app.post("/api/helper/start")
@@ -315,8 +324,6 @@ def api_uninstall():
     Mode would show.
     """
     data = request.json or {}
-    if _job["active"]:
-        return _busy_reply()
     manager, target = data.get("manager"), data.get("target", "")
     if not target:
         return jsonify({"ok": False,
@@ -324,6 +331,8 @@ def api_uninstall():
     if _ui_mode() != "advanced" and not _user_installed_app(data):
         return _advanced_only()
     with _install_lock:
+        if _job["active"]:
+            return _busy_reply()
         _job.update(active=True, label=proc.t("Removal"))
         try:
             if manager == "apt":
@@ -343,6 +352,7 @@ def api_uninstall():
         finally:
             _job.update(active=False, label="")
             apps_mod.bust_meta_cache()
+            desktop.bust_collect_cache()
 
 
 # -------------------------------------------------------------------- startup
@@ -380,8 +390,11 @@ def api_startup_candidates():
             if not command:
                 continue
             rows.append({
+                # The id, not the command, is what the add endpoint takes: the
+                # command line is re-derived on the server, never accepted from the
+                # browser.
+                "id": rec["id"],
                 "name": rec["name"],
-                "exec": command,
                 "icon": rec["icon"],
                 "icon_url": rec["icon_url"],
                 "comment": rec["comment"] or rec["generic"],
@@ -393,11 +406,23 @@ def api_startup_candidates():
 
 @app.post("/api/startup/add")
 def api_startup_add():
+    """Add a startup entry for an installed app, identified by its list id.
+
+    The command line is re-derived from the server's own app list and never taken
+    from the request: accepting an ``exec`` field made this endpoint a way to put
+    any command on the user's auto-start list. The id must belong to the current
+    view, so Simple Mode cannot add an app its list does not show.
+    """
     data = request.json or {}
+    app_id = str(data.get("id", ""))
     try:
+        rec = next((r for r in apps_mod.apps(_ui_mode()) if r["id"] == app_id), None)
+        if rec is None:
+            return jsonify({"ok": False,
+                            "message": proc.t("This app is no longer installed.")}), 404
         ok, msg, detail = autostart.add(
-            data.get("name", ""), data.get("exec", ""),
-            data.get("icon", ""), data.get("comment", ""),
+            rec["name"], rec.get("exec", ""),
+            rec.get("icon", ""), rec.get("comment", "") or rec.get("generic", ""),
         )
         return jsonify({"ok": ok, "message": msg, "detail": detail})
     except Exception as exc:
@@ -501,17 +526,23 @@ def api_package_remove():
     if _ui_mode() != "advanced":
         return _advanced_only()
     data = request.json or {}
-    if _job["active"]:
-        return _busy_reply()
     name = (data.get("name") or "").strip()
     if not name:
         return jsonify({"ok": False,
                         "message": proc.t("No package name given.")}), 400
+    # The name goes on a privileged command line; a leading dash would be read as an
+    # option and anything but a package name is not what the user typed to confirm.
+    if not proc.is_apt_pkg(name):
+        return jsonify({"ok": False,
+                        "message": proc.t("This does not look like a package name: "
+                                          "{name}", name=name)}), 400
     if data.get("confirmed") != name:
         return jsonify({"ok": False, "message": proc.t(
             "Confirmation text did not match the package name. Nothing was "
             "removed.")}), 400
     with _install_lock:
+        if _job["active"]:
+            return _busy_reply()
         _job.update(active=True, label=proc.t("Removing {name}", name=name))
         try:
             ok, msg, detail = (apt.purge if data.get("purge") else apt.uninstall)(name)
@@ -522,15 +553,16 @@ def api_package_remove():
         finally:
             _job.update(active=False, label="")
             apps_mod.bust_meta_cache()
+            desktop.bust_collect_cache()
 
 
 @app.post("/api/packages/autoremove")
 def api_autoremove():
     if _ui_mode() != "advanced":
         return _advanced_only()
-    if _job["active"]:
-        return _busy_reply()
     with _install_lock:
+        if _job["active"]:
+            return _busy_reply()
         _job.update(active=True, label=proc.t("Cleaning up"))
         try:
             rc, out, err = apt.autoremove()
@@ -544,6 +576,147 @@ def api_autoremove():
         finally:
             _job.update(active=False, label="")
             apps_mod.bust_meta_cache()
+            desktop.bust_collect_cache()
+
+
+# -------------------------------------------------------- install by name
+
+@app.get("/api/apt/search")
+def api_apt_search():
+    """Search the apt repositories by package name - Advanced Mode only, like the
+    install it feeds."""
+    if _ui_mode() != "advanced":
+        return _advanced_only()
+    q = (request.args.get("q") or "").strip()[:100]
+    if not q:
+        return jsonify({"ok": True, "results": []})
+    try:
+        return jsonify({"ok": True, "results": apt.search(q)})
+    except Exception as exc:
+        return _err(exc)
+
+
+@app.post("/api/packages/install")
+def api_packages_install():
+    """Install a package by its repository name, through one of the three managers.
+
+    Advanced Mode only, for the same reason as the package list: choosing from the
+    repository database is the kind of system-level act the simple view stays out of.
+    The name must pass the manager's own shape check (in the backend modules, so it
+    holds on every privilege path), and the busy flag is taken under the lock.
+    """
+    if _ui_mode() != "advanced":
+        return _advanced_only()
+    data = request.json or {}
+    manager = str(data.get("manager") or "")
+    name = str(data.get("name") or "").strip()
+    if not name:
+        return jsonify({"ok": False,
+                        "message": proc.t("No package name given.")}), 400
+    if manager not in ("apt", "snap", "flatpak"):
+        return jsonify({"ok": False,
+                        "message": proc.t("SLPM does not manage this item.")}), 400
+    with _install_lock:
+        if _job["active"]:
+            return _busy_reply()
+        _job.update(active=True, label=proc.t("Installing {name}", name=name))
+        try:
+            if manager == "apt":
+                ok, msg, detail = apt.install_name(name)
+            elif manager == "snap":
+                ok, msg, detail = flatpak_snap.snap_install(name)
+            else:
+                ok, msg, detail = flatpak_snap.flatpak_install(name)
+            _log_action("install", f"{manager}:{name}", ok, msg)
+            return jsonify({"ok": ok, "message": msg, "detail": detail})
+        except Exception as exc:
+            return _err(exc)
+        finally:
+            _job.update(active=False, label="")
+            apps_mod.bust_meta_cache()
+            desktop.bust_collect_cache()
+
+
+# -------------------------------------------------------------- updates
+
+@app.get("/api/updates")
+def api_updates():
+    """What can be updated, by manager.
+
+    apt reports an exact list from a dry run; flatpak and snap report the apps that
+    have a newer version or revision. All three are read-only queries. Simple Mode
+    gets the same lists: updating what is already installed is not an operation that
+    targets anything the user does not own, and the real protections (the confirm
+    dialog and the polkit password) are on the run endpoint, which both modes share.
+    """
+    try:
+        return jsonify({
+            "ok": True,
+            "apt": apt.list_upgrades(),
+            "flatpak": flatpak_snap.flatpak_updates(),
+            "snap": flatpak_snap.snap_updates(),
+            "managers": _env()["managers"],
+        })
+    except Exception as exc:
+        return _err(exc)
+
+
+@app.post("/api/updates/run")
+def api_updates_run():
+    """Refresh the package lists, or run one manager's update.
+
+    Available in both modes: an update brings installed items to their newest
+    version and never removes anything, so it is not gated the way install and
+    removal are. The confirm dialog and the polkit password are the protections.
+    """
+    data = request.json or {}
+    manager = str(data.get("manager") or "")
+    step = str(data.get("step") or "update")
+    name = str(data.get("name") or "").strip()
+    version = str(data.get("version") or "").strip()
+    if manager not in ("apt", "snap", "flatpak"):
+        return jsonify({"ok": False,
+                        "message": proc.t("SLPM does not manage this item.")}), 400
+    with _install_lock:
+        if _job["active"]:
+            return _busy_reply()
+        # With a name the run targets one row of the list instead of the whole manager;
+        # the label follows so the status bar says which item is moving.
+        _job.update(active=True,
+                    label=proc.t("Updating {name}…", name=name) if name
+                    else proc.t("Updating…"))
+        try:
+            if name:
+                if manager == "apt":
+                    ok, msg, detail = apt.upgrade_one(name, version)
+                elif manager == "flatpak":
+                    ok, msg, detail = flatpak_snap.flatpak_update_one(name)
+                else:
+                    ok, msg, detail = flatpak_snap.snap_refresh_one(name)
+            elif manager == "apt" and step == "refresh":
+                rc, out, err = apt.refresh_lists()
+                ok = rc == 0
+                msg = (proc.t("Package lists were refreshed.") if ok
+                       else proc.t("Refreshing the package lists failed."))
+                detail = "" if ok else apt._apt_reason(out, err)
+            elif manager == "apt":
+                rc, out, err = apt.do_upgrade()
+                ok = rc == 0
+                msg = (proc.t("System packages were updated.") if ok
+                       else proc.t("Updating the system packages failed."))
+                detail = "" if ok else apt._apt_reason(out, err)
+            elif manager == "flatpak":
+                ok, msg, detail = flatpak_snap.flatpak_update()
+            else:
+                ok, msg, detail = flatpak_snap.snap_refresh()
+            _log_action("update", manager, ok, msg)
+            return jsonify({"ok": ok, "message": msg, "detail": detail})
+        except Exception as exc:
+            return _err(exc)
+        finally:
+            _job.update(active=False, label="")
+            apps_mod.bust_meta_cache()
+            desktop.bust_collect_cache()
 
 
 # ------------------------------------------------------------------- status
@@ -569,9 +742,22 @@ def api_pick():
         "instead.")})
 
 
+MAX_ACTIONS_LOG = 1024 * 1024  # keep the log from growing for the life of the machine
+
+
 def _log_action(kind, target, ok, message):
+    """One line per package operation, rotated at about one megabyte.
+
+    The old file is renamed, never truncated in place: a reader holding the file open
+    keeps reading the old contents while the new log starts fresh.
+    """
     try:
         state.CACHE.mkdir(parents=True, exist_ok=True)
+        try:
+            if state.ACTIONS_LOG.stat().st_size > MAX_ACTIONS_LOG:
+                state.ACTIONS_LOG.replace(state.ACTIONS_LOG.with_name("actions.log.old"))
+        except OSError:
+            pass
         with open(state.ACTIONS_LOG, "a") as fh:
             fh.write(f"{_now()}\t{kind}\t{target}\t{'ok' if ok else 'failed'}\t"
                      f"{(message or '').splitlines()[0][:200]}\n")
@@ -597,7 +783,18 @@ def server_error(_):
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO,
+                        format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     host = os.environ.get("SLPM_HOST", "127.0.0.1")
     port = int(os.environ.get("SLPM_PORT", "8686"))
-    print(f"SLPM running at http://{host}:{port}")
-    app.run(host=host, port=port, debug=False, threaded=True)
+    try:
+        from waitress import serve
+
+        # waitress is a production WSGI server: threaded, keeps living across the
+        # long package operations. The development server app.run() is the fallback
+        # for a machine without it.
+        print(f"SLPM running at http://{host}:{port}")
+        serve(app, host=host, port=port, threads=16, ident="slpm")
+    except ImportError:
+        print(f"SLPM running at http://{host}:{port} (development server)")
+        app.run(host=host, port=port, debug=False, threaded=True)

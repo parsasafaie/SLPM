@@ -1,12 +1,72 @@
 """Subprocess helpers. Never raise on non-zero exit - return (rc, out, err)."""
 import contextvars
 import os
+import re
 import shutil
 import subprocess
 
 from . import i18n
 
 TIMEOUT = 300
+
+# ------------------------------------------------------------------- name shapes
+#
+# A string that is about to become a non-flag operand of a package tool (a package
+# name, an app id, a snap name) must match one of these before it is handed to any
+# command - privileged or not. The helper's allowlist is the second gate, but it only
+# runs when the helper answers; the pkexec and sudo fallbacks in privileged() have no
+# allowlist at all, so this is the check that covers every path. The shapes also keep
+# a leading dash (which a package tool would read as an option) and any whitespace
+# out of the operands.
+
+APT_PKG = re.compile(r"^[a-z0-9][a-z0-9+._:-]*$")          # vlc, libfoo1.2-3
+FLATPAK_APP_ID = re.compile(r"^[A-Za-z0-9]+(?:\.[A-Za-z0-9]+)+$")  # org.gimp.GIMP
+SNAP_NAME = re.compile(r"^[a-z0-9][a-z0-9-]*$")            # code, gimp
+
+
+def is_apt_pkg(name):
+    return bool(APT_PKG.match(name or ""))
+
+
+def is_flatpak_app_id(name):
+    return bool(FLATPAK_APP_ID.match(name or ""))
+
+
+def is_snap_name(name):
+    return bool(SNAP_NAME.match(name or ""))
+
+
+# ---------------------------------------------------------------- live processes
+
+def exe_to_pids():
+    """{resolved executable path: [pids]} for every process readable from /proc.
+
+    One pass over /proc so a caller asking about several apps does not pay for a
+    pass per app. A pid that exits mid-scan, or one the caller may not inspect,
+    simply does not appear - for our uses (this user's own apps) that is exact.
+    """
+    mapping = {}
+    try:
+        entries = os.listdir("/proc")
+    except OSError:
+        return mapping  # not a Linux /proc view
+    for entry in entries:
+        if not entry.isdigit():
+            continue
+        try:
+            target = os.readlink(f"/proc/{entry}/exe")
+        except OSError:
+            continue
+        mapping.setdefault(target, []).append(int(entry))
+    return mapping
+
+
+def pids_with_exe_prefix(prefix):
+    """The pids of every process whose executable path starts with prefix."""
+    return [pid for exe, pids in exe_to_pids().items() if exe.startswith(prefix)
+            for pid in pids]
+
+
 # How long to wait for a person to answer the polkit dialog. This is the time to *answer*,
 # not a cap on the operation: pkexec runs its child to completion, and a package operation
 # (a kernel install, a big upgrade) routinely takes longer than a minute. Bounding the whole
@@ -82,29 +142,6 @@ def have_graphical_session():
 
 # ---------------------------------------------------------------- privileges
 
-def _can_root_without_password(user):
-    rc, _, _ = run(["sudo", "-n", "-u", "root", "true"], timeout=10)
-    return rc == 0
-
-
-def privilege_helper():
-    """What we would use to escalate, or None if we already are root."""
-    if os.geteuid() == 0:
-        return None
-    if which("pkexec"):
-        return "pkexec"
-    if which("sudo"):
-        try:
-            import getpass
-
-            if _can_root_without_password(getpass.getuser()):
-                return "sudo"
-        except Exception:
-            pass
-        return "sudo"
-    return None
-
-
 def privileged(argv, timeout=TIMEOUT):
     """
     Run argv as root without ever waiting on a password prompt.
@@ -122,7 +159,10 @@ def privileged(argv, timeout=TIMEOUT):
     # A live helper answers with a real result; a refusal (rc 126) is not a final
     # answer, because the allowlist may simply not cover this operation. Fall through
     # to pkexec for it, so an unsupported-but-legitimate command still has a path.
-    rc = helper.client(helper_socket(), argv, timeout=timeout)
+    # The client timeout must cover the helper's own execution budget: an operation
+    # the helper is allowed to run for 900s must not be declared dead at 300s, or the
+    # same work would be reissued through pkexec while the first copy still runs.
+    rc = helper.client(helper_socket(), argv, timeout=max(timeout, helper.RUN_TIMEOUT))
     if rc is not None and rc[0] != 126:
         return rc
 

@@ -14,7 +14,9 @@ A simple local web app for installing, viewing, launching, and removing Linux so
   - The Install tab is identical in both modes.
 - Telling your apps from pre-installed ones is evidence-based: SLPM reads the package managers' own records — the date each dpkg package first appears in the dpkg log, the snap seed file, and the earliest modification time of the Flatpak deployment commit directories. It does not infer ownership from where a desktop entry lives or from dpkg `.list` file dates, because those signals can mislead.
 - A Startup Apps tab for viewing, adding, and turning off user-owned or packaged startup entries
-- Support for `.deb`, AppImage, `.flatpakref`, several archive formats, and `.run`/`.sh` files that can be registered without being executed — opening a local file or downloading one from a link
+- An Updates tab (both modes) that lists what apt, Flatpak, and Snap each have available, and runs the refresh or the update per manager
+- Install by name (Advanced Mode only): search the apt repositories as you type, or install an apt package, a snap, or a Flatpak app by its exact name
+- Support for `.deb`, `.snap`, AppImage, `.flatpakref`, several archive formats, and `.run`/`.sh` files that can be registered without being executed — opening a local file or downloading one from a link
 - Downloads run as background jobs with pause, continue and stop controls, a live progress bar, and automatic installation after completion unless another local file is already selected
 - Automatic detection of available `apt`, Flatpak, and Snap tools
 - English and Persian interface with light and dark themes
@@ -49,6 +51,12 @@ source .venv/bin/activate
 python selftest.py
 ```
 
+The selftest is a plain script, no test framework. It covers the parsing and safety logic (Exec= handling, desktop filtering, the root helper's command allowlist, archive path checks, the HTTP endpoints' refusal behaviour, and the translation catalogs in both the backend and the browser). A few checks read this machine's real state — the dpkg log, the installed apps, the startup entries — to prove the ownership classifier works end to end. On a machine where that state is not interesting (CI, a fresh container), skip them with:
+
+```bash
+python selftest.py --skip-machine
+```
+
 ## Project structure
 
 ```text
@@ -60,6 +68,7 @@ slpm/               Package and desktop-integration logic
 templates/          HTML templates
 static/             CSS and JavaScript assets
 docs/               GitHub Pages website
+selftest.py         Self-check script (no test framework needed)
 requirements.txt    Python dependencies
 ```
 

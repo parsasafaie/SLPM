@@ -3,15 +3,11 @@ import shutil
 import zipfile
 from pathlib import Path
 
-from . import appimage, apt, desktop, proc
-from .i18n import tr as _tr
+from . import appimage, apt, desktop, flatpak_snap, proc, util
 
+_t = proc.t
 
-def _t(english, **values):
-    """Translate a message into the language of the request being served."""
-    return _tr(proc.lang(), english, **values)
-
-SUPPORTED = ("deb", "AppImage", "flatpakref", "tar.gz", "tgz", "tar.xz", "txz",
+SUPPORTED = ("deb", "AppImage", "flatpakref", "snap", "tar.gz", "tgz", "tar.xz", "txz",
              "tar.bz2", "tar.zst", "zip", "run", "sh")
 
 EXTRACT_ROOT = Path.home() / ".local/share/slpm/apps"
@@ -47,6 +43,9 @@ def detect(path):
     if low.endswith(".flatpakref"):
         return {**rec, "kind": "flatpakref", "label": _t("Flatpak reference"),
                 "detail": _t("Will be installed with flatpak."), "installable": True}
+    if low.endswith(".snap"):
+        return {**rec, "kind": "snap", "label": _t("Snap package"),
+                "detail": _t("Will be installed with snap."), "installable": True}
     if appimage.is_archive(low):
         return {**rec, "kind": "archive", "label": _t("Archive"),
                 "detail": _t("Will be extracted to ~/.local/share/slpm/apps, then you "
@@ -59,9 +58,9 @@ def detect(path):
                              "entry."),
                 "installable": True}
     return {**rec, "kind": "unknown", "label": _t("Unsupported file type"),
-            "detail": _t("SLPM installs .deb, .AppImage, .flatpakref and archives "
-                         "({formats}). Convert this file first.",
-                         formats=", ".join(SUPPORTED[3:])),
+            "detail": _t("SLPM installs .deb, .AppImage, .flatpakref, .snap and "
+                         "archives ({formats}). Convert this file first.",
+                         formats=", ".join(SUPPORTED[4:])),
             "installable": False}
 
 
@@ -100,6 +99,16 @@ def install(path, opts=None):
     if kind == "flatpakref":
         return _flatpakref(path)
 
+    if kind == "snap":
+        try:
+            ok, msg, detail = flatpak_snap.snap_install_file(path)
+        except Exception as exc:
+            return _fail(_t("Installation failed"), str(exc), "snap")
+        return {"ok": ok, "kind": "snap", "title": _t("Snap package"),
+                "message": msg,
+                "detail": "" if ok else detail,
+                "desktop_file": None, "needs_choice": False, "choices": []}
+
     if kind == "archive":
         return _archive(path, opts)
 
@@ -114,7 +123,9 @@ def _flatpakref(path):
         return _fail(_t("Flatpak is not installed"),
                      _t("This computer has no flatpak command. Install flatpak first "
                         "(Advanced mode -> flatpak)."), "flatpakref")
-    rc, out, err = proc.privileged(["flatpak", "install", "-y", "--from", str(path)])
+    # User level on purpose: this must land where flatpak_uninstall looks again. A
+    # root install goes to the system installation, which this UI could not remove.
+    rc, out, err = proc.run(["flatpak", "install", "-y", "--from", str(path)], timeout=900)
     if rc == 0:
         return {"ok": True, "kind": "flatpakref", "title": "Flatpak",
                 "message": _t("Installed."), "detail": "", "desktop_file": None,
@@ -253,10 +264,7 @@ def _register_script(path, opts):
 
 
 def _safe_slug(text):
-    import re
-
-    s = re.sub(r"[^A-Za-z0-9._-]+", "-", text).strip("-").lower()
-    return s or "package"
+    return util.slug(text, "package")
 
 
 def _fail(title, detail, kind):

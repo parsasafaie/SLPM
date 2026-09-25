@@ -415,9 +415,74 @@ dl.kv dd { margin: 0; overflow-wrap: anywhere; }
 .toast.ok { border-left-color: var(--ok); }
 .toast.bad { border-left-color: var(--danger); }
 .toast strong { display: block; font-size: .92rem; }
-.toast p { font-size: .85rem; color: var(--muted); margin-top: .15rem; }
+/* A failure carries the last lines of the tool's output, so the message keeps its
+   line breaks and scrolls rather than truncating a real error to one line. */
+.toast p {
+  font-size: .85rem; color: var(--muted); margin-top: .15rem;
+  white-space: pre-wrap; word-break: break-word;
+  max-height: 14em; overflow-y: auto;
+}
 .toast .close { float: right; border: 0; background: none; cursor: pointer; color: var(--muted); font-size: 1rem; line-height: 1; }
 @keyframes pop { from { opacity: 0; transform: translateY(6px); } }
+
+/* -------------------------------------------------- install by name (apps) */
+.install-row { display: flex; gap: .6rem; align-items: stretch; margin-top: .8rem; }
+.install-row .select { flex: 0 0 auto; width: auto; min-width: 110px; }
+.install-row input { flex: 1 1 auto; }
+.pkg-results { margin-top: .7rem; display: grid; gap: .4rem; }
+.pkg-results:empty { margin-top: 0; display: block; }
+.pkg-results p { margin: 0; }
+.pkg-results .choice {
+  text-align: left; padding: .6rem .75rem; border: 1px solid var(--line);
+  border-radius: 10px; background: var(--field); cursor: pointer; font: inherit; width: 100%;
+}
+.pkg-results .choice:hover { border-color: var(--accent); background: var(--choice-hover); }
+.pkg-results .choice strong { display: block; font-weight: 600; }
+.pkg-results .choice small {
+  display: block; color: var(--muted); font-size: .78rem; margin-top: .1rem;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+/* ------------------------------------------------------------ updates page */
+.head-controls { gap: .45rem; }
+/* The chevron sits in the card header and opens the list of upgradable items.
+   It exists only while that manager actually has something to update, and points
+   down (up, once expanded) at the list it controls. */
+.chevron-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 27px; height: 27px; padding: 0; border: 0; border-radius: 8px;
+  background: transparent; color: var(--muted); cursor: pointer;
+  transition: transform .18s ease, background .15s, color .15s;
+}
+.chevron-btn:hover { background: var(--hover); color: var(--text); }
+.chevron-btn svg {
+  width: 16px; height: 16px; fill: none; stroke: currentColor;
+  stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round;
+}
+.chevron-btn[aria-expanded="true"] { transform: rotate(180deg); }
+.updates-list.collapsed { display: none; }
+.updates-list { margin: .7rem 0; display: grid; gap: .3rem; }
+.updates-list:empty { margin: 0; }
+.updates-row {
+  display: flex; align-items: baseline; gap: .6rem; padding: .5rem .65rem;
+  border: 1px solid var(--line); border-radius: 9px; background: var(--field); min-width: 0;
+}
+.updates-row strong {
+  font-weight: 600; font-family: var(--mono); font-size: .86rem;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.updates-row small { color: var(--muted); font-size: .8rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.updates-row code { margin-inline-start: auto; font-size: .8rem; color: var(--muted); white-space: nowrap; }
+/* The row's own update button: compact, so the name and the versions stay readable. */
+.updates-row .btn {
+  flex: 0 0 auto; padding: .26rem .65rem; font-size: .78rem; border-radius: 8px;
+}
+/* A running snap gets a marker by its name: its refresh will stop it, so the user
+   sees at a glance which app the update is about to close. */
+.running-dot {
+  flex: 0 0 auto; width: .5rem; height: .5rem; border-radius: 50%;
+  background: var(--warn); align-self: center;
+}
 
 @media (max-width: 900px) {
   .list { grid-template-columns: 1fr; }
@@ -451,7 +516,7 @@ dl.kv dd { margin: 0; overflow-wrap: anywhere; }
 :root[dir="rtl"] .toast .close { float: left; }
 /* Package detail lists read right-to-left. */
 :root[dir="rtl"] dl.kv dd { text-align: right; }
-:root[dir="rtl"] .modal .choice { text-align: right; }
+:root[dir="rtl"] .modal .choice, :root[dir="rtl"] .pkg-results .choice { text-align: right; }
 /* Latin package names and file paths must not be reordered by the bidi algorithm. */
 .path-ltr, code, .tag, dl.kv dd, .item .meta strong, .modal code {
   unicode-bidi: isolate;

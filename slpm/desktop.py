@@ -8,17 +8,12 @@ driver) simply has nothing to list.
 """
 import os
 import re
-import shutil
-import tempfile
+import time
 from pathlib import Path
 
-from . import proc
-from .i18n import tr as _tr
+from . import proc, util
 
-
-def _t(english, **values):
-    """Translate a message into the language of the request being served."""
-    return _tr(proc.lang(), english, **values)
+_t = proc.t
 
 
 USER_APPS = Path.home() / ".local/share/applications"
@@ -186,7 +181,15 @@ def _resolve_localized(data, key):
     return data.get(key) or data.get(f"{key}[en]") or ""
 
 
-def collect(mode="simple"):
+# The scan costs a directory walk of six or seven folders plus a parse per entry, and
+# the two views (simple/advanced) are now just filters over one result set, so a short
+# TTL cache serves both of them. Callers get shallow copies, because the app list
+# annotates each record with fields the scan itself does not produce.
+_COLLECT_TTL = 10.0
+_COLLECT_CACHE = {"at": 0.0, "rows": None}
+
+
+def collect(mode="simple", fresh=False):
     """
     One record per installed .desktop entry, scanned from every directory an
     application menu searches.
@@ -196,7 +199,35 @@ def collect(mode="simple"):
 
     Entries are keyed by file name so a user override replaces the system one, and a
     snap/flatpak export never duplicates an entry already listed.
+
+    The rows returned are copies: the cached scan is shared between the two views and
+    must not be mutated by its consumers.
     """
+    now = time.monotonic()
+    if not fresh and _COLLECT_CACHE["rows"] is not None and now - _COLLECT_CACHE["at"] < _COLLECT_TTL:
+        rows = _COLLECT_CACHE["rows"]
+    else:
+        rows = _scan_all()
+        _COLLECT_CACHE["at"] = now
+        _COLLECT_CACHE["rows"] = rows
+    if mode == "simple":
+        rows = [r for r in rows if r["visible"]]
+    else:
+        rows = [r for r in rows if not r["hidden"]]
+    return [dict(r) for r in rows]
+
+
+def bust_collect_cache():
+    """Forget the remembered scan so the next collect() reads the disk again.
+
+    Call this after any operation that adds or removes a .desktop file (installing an
+    AppImage, removing an app, adding an autostart entry).
+    """
+    _COLLECT_CACHE["rows"] = None
+
+
+def _scan_all():
+    """Scan every APP_DIR once and keep each entry's view-visibility flags."""
     seen = {}
     for rank, root in enumerate(APP_DIRS):
         if not root.is_dir():
@@ -204,10 +235,6 @@ def collect(mode="simple"):
         for f in sorted(root.glob("*.desktop")):
             entry = parse(f)
             if not entry:
-                continue
-            if mode == "simple" and not is_visible(entry):
-                continue
-            if mode == "advanced" and _is_true(entry.get("Hidden")):
                 continue
 
             key = f.name
@@ -233,6 +260,10 @@ def collect(mode="simple"):
                 "generic": entry.get("GenericName", ""),
                 # Which packaging system put this entry here, if it can be told.
                 "provided_by": _provided_by(root, entry, f),
+                # The two views filter on these; is_visible() already excludes hidden
+                # entries, so visible implies not hidden.
+                "visible": is_visible(entry),
+                "hidden": _is_true(entry.get("Hidden")),
                 "_rank": rank,
             }
             rec["can_launch"] = bool(exec_line) and argv and (
@@ -302,11 +333,16 @@ def icon_path(icon_name, app_id=""):
         if resolved:
             return resolved
     else:
+        # The name is joined onto each search root, so a name like "../../etc/passwd"
+        # or a symlink inside an icon directory must be judged by the same containment
+        # check as an absolute path - resolve() follows the link, and relative_to
+        # rejects anything that lands outside an icon directory.
         for root in search_roots:
             for ext in exts:
                 cand = root / f"{icon_name}{ext}"
-                if cand.exists():
-                    return str(cand)
+                resolved = _safe_icon_file(cand, search_roots)
+                if resolved:
+                    return resolved
     name = app_id or icon_name
     rc, out, _ = proc.run(
         ["find", "/usr/share/icons", str(ICON_DIR), "-iname", f"{name}.*",
@@ -340,18 +376,10 @@ def _safe_icon_file(path, search_roots):
     return None
 
 
-def _write(path, text):
-    path.parent.mkdir(parents=True, exist_ok=True)
-    fd, tmp = tempfile.mkstemp(dir=str(path.parent))
-    with os.fdopen(fd, "w") as fh:
-        fh.write(text)
-    shutil.move(tmp, path)
-
-
 def desktop_file(name, exec_line, icon=None, comment="", categories=("Utility",),
                  terminal=False, path_override=None, mime=None):
     """Create ~/.local/share/applications/<slug>.desktop and refresh the database."""
-    slug = re.sub(r"[^A-Za-z0-9._-]+", "-", name).strip("-").lower() or "app"
+    slug = util.slug(name)
     target = USER_APPS / (path_override or f"{slug}.desktop")
     body = [
         "[Desktop Entry]",
@@ -371,7 +399,7 @@ def desktop_file(name, exec_line, icon=None, comment="", categories=("Utility",)
         body.append(f"MimeType={mime}")
     body.append("StartupNotify=true")
     body.append("")
-    _write(target, "\n".join(body))
+    util.atomic_write(target, "\n".join(body))
     refresh()
     return target
 
@@ -394,11 +422,13 @@ def remove(path):
 
 
 def launch(desktop_record):
-    if desktop_record["terminal"] and proc.which("x-terminal-emulator"):
-        return proc.run(["x-terminal-emulator", "-e", desktop_record["exec"]])
     argv = exec_argv(desktop_record["exec"])
     if not argv:
         return 1, "", _t("This app has no launch command.")
+    if desktop_record["terminal"] and proc.which("x-terminal-emulator"):
+        # The whole Exec= line as one argument would make the terminal execute a
+        # string, not a program; pass the parsed argv like the direct branch does.
+        return proc.run(["x-terminal-emulator", "-e", *argv])
     if not proc.have_graphical_session():
         # Launching a GUI app headless is pointless; report instead of silently failing.
         return 1, "", _t("No graphical session detected - cannot launch apps.")
@@ -439,10 +469,16 @@ def launch_by_id(entry_id):
             return 0, "", ""
         if provided.startswith("flatpak:"):
             app_id = provided.split(":", 1)[1]
-            rc, out, err = proc.run(["flatpak", "run", app_id], timeout=20)
-            if rc == 0:
-                return 0, "", ""
-            return 1, "", err or out or _t("Could not start this app.")
+            if not app_id or not proc.which("flatpak"):
+                return 1, "", _t("Could not start this app.")
+            import subprocess
+
+            # The app runs in the user's session, detached from SLPM. A blocking
+            # proc.run here would wait until the app quit - an earlier 20s timeout
+            # on that wait killed flatpak apps after 20 seconds of use.
+            subprocess.Popen(["flatpak", "run", app_id], start_new_session=True,
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            return 0, "", ""
         if not rec.get("exec"):
             return 1, "", _t("This app has no launch command.")
         return launch(rec)

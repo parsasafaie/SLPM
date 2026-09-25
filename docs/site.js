@@ -103,6 +103,10 @@
       en: 'A warning asking for confirmation before entering Advanced Mode and explaining that removing essential packages can break the operating system.',
       fa: 'پنجرهٔ هشدار برای تأیید ورود به حالت پیشرفته؛ توضیح می‌دهد حذف بستهٔ حیاتی سیستم می‌تواند سیستم‌عامل را از کار بیندازد.',
     },
+    updates: {
+      en: 'The Updates page in Advanced Mode: refresh the apt package lists, and per package manager the packages or apps that have a newer version, with buttons to run the updates.',
+      fa: 'صفحهٔ به‌روزرسانی‌ها در حالت پیشرفته؛ تازه‌کردن فهرست بسته‌های apt و فهرست بسته‌ها یا برنامه‌هایی که نسخهٔ جدیدتر دارند، برای هر مدیر بسته، همراه با دکمه‌های اجرای به‌روزرسانی.',
+    },
   };
 
   function syncShots() {

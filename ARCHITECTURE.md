@@ -60,7 +60,7 @@ Capabilities are enforced on the server:
 
 - In Simple Mode, `/api/apps` returns only applications for which `ownership.py` confirms a user install.
 - In Simple Mode, `/api/startup` returns only user-owned startup entries.
-- `/api/packages*` endpoints return 403 in Simple Mode.
+- `/api/packages*`, `/api/apt/search`, `/api/updates` and `/api/updates/run` return 403 in Simple Mode. The 403 body carries an `advanced_only` flag so the browser can explain the refusal instead of showing a generic error.
 - In Advanced Mode, the Installed Apps page uses `/api/packages` and shows the installed `dpkg`/`apt` packages, including pre-installed applications, libraries, system components and essential packages. Startup Apps collects both user entries and entries supplied by system packages.
 - Advanced Mode is not a unified list of every software source. The Installed Apps list is specifically the `dpkg`/`apt` package list, not a complete database of every package source.
 - In Simple Mode, `/api/uninstall` derives the target's ownership again from the simple list and rejects pre-installed applications. Startup enable and disable paths reject entries that are not user-owned.
@@ -99,7 +99,7 @@ For each application, SLPM finds the earliest modification time (`mtime`) among 
 
 `slpm/autostart.py` reads `/etc/xdg/autostart` and `~/.config/autostart` in priority order. Results are keyed by filename, so a user file with the same name takes precedence over a packaged file. Disabled entries remain listed so they can be enabled again.
 
-The interface builds the add list from applications with an available launch command in the current mode. The server's add endpoint accepts a name and command directly, but strips standard `.desktop` field codes and verifies that the command exists on the system before writing a file. To avoid overwriting a file the user or a package already has, a new entry is written under a name such as `slpm-<name>.desktop` in `~/.config/autostart`. If the same command already exists, no duplicate entry is created; the application therefore does not start twice at login. If two names normalise to the same filename, numbering prevents a collision.
+The interface builds the add list from applications with an available launch command in the current mode. The server's add endpoint accepts only the list id of the application; the command line is re-derived from the server's own scan of that entry, never taken from the request. A hand-made request therefore cannot put an arbitrary command on the user's auto-start list. To avoid overwriting a file the user or a package already has, a new entry is written under a name such as `slpm-<name>.desktop` in `~/.config/autostart`. If the same command already exists, no duplicate entry is created; the application therefore does not start twice at login. If two names normalise to the same filename, numbering prevents a collision.
 
 Disabling an entry depends on its source:
 
@@ -121,7 +121,9 @@ SLPM makes the file executable and tries to open a type-2 AppImage with `--appim
 
 ### Flatpak references
 
-The `flatpak` command is checked first. When available, a `.flatpakref` file is installed with `flatpak install -y --from`. Flatpak operations normally run at user level, but the current installation path still crosses the general privilege boundary and may request administrator access.
+The `flatpak` command is checked first. When available, a `.flatpakref` file is installed with `flatpak install -y <remote> <app-id>`.
+
+Flatpak operations always run at user level, never as root. A root `flatpak` would install into the *system* installation — a place a per-user account cannot remove from again through this UI — so `slpm/helper.py` deliberately has no flatpak branch in its allowlist: the privilege bridge cannot be asked for a root flatpak at all.
 
 ### Archives
 
@@ -135,7 +137,9 @@ A direct `.run` or `.sh` input is not executed. SLPM only sets its executable pe
 
 ## Background downloads
 
-`slpm/download.py` accepts only URLs beginning with `http://` or `https://`. `xdg-user-dir` determines the Downloads path; when it is unavailable, SLPM uses `~/Downloads`. The filename is derived from the URL and made unique if necessary so an existing file is not overwritten.
+`slpm/download.py` accepts only URLs beginning with `http://` or `https://`. The host is then checked before any connection is made: every address the name resolves to must be a public one. Loopback, private LAN, link-local (including the cloud metadata address `169.254.169.254`), reserved and unspecified ranges are refused, and a name that does not resolve is refused too — the endpoint runs with the user's rights and follows redirects, so it must not become a way to probe or pull data from the local network. Redirect hops are capped, because urllib otherwise follows them without a count.
+
+`xdg-user-dir` determines the Downloads path; when it is unavailable, SLPM uses `~/Downloads`. The filename is derived from the URL after decoding it, then reduced to a bare file name: an encoded separator (`%2F`) used to re-introduce slashes after the split and turn a download into a write at an attacker-chosen path. Dot files, `.`/`..` and names without an extension all fall back to a generic `download` name, and a colliding name is made unique so an existing file is never overwritten.
 
 Each `DownloadJob` has its own background thread and `threading.Lock`. The job list is protected by a short global lock. Statuses are `queued`, `running`, `paused`, `done`, `failed` and `stopped`, and each data chunk is written only after checking state under that job's lock. Pausing closes the download stream; continuing opens a fresh connection at the same byte. A full stop removes the partial file.
 
@@ -146,7 +150,7 @@ After receiving part of a file, the next request sends `Range: bytes=<downloaded
 - If the server returns `416 Range Not Satisfiable`, the partial file is emptied and the complete request is restarted without `Range`.
 - Any other network or HTTP error marks the job `failed`.
 
-The browser polls job status every second. After a job becomes `done`, if no other file is selected in the form, the saved path is sent through the same detection and installation flow. Automatic installation happens in the browser rather than in the download thread, so it uses the same install lock and validation checks.
+The browser polls job status every second. After a job becomes `done`, if no other file is selected in the form, the saved path is sent through the same detection and installation flow. Automatic installation happens in the browser rather than in the download thread, so it uses the same install lock and validation checks. The job list keeps only the newest finished jobs: the page has already drawn a finished row by the time it is pruned, and the list (and the memory behind it) does not grow for the life of the server.
 
 ## Application list and safe launching
 
@@ -165,9 +169,18 @@ Records are merged by filename, with higher-priority paths replacing lower-prior
 
 `/api/icon` maps `Icon=` to a real file. Absolute values and fallback search results are resolved and must remain inside the known standard icon directories. Accepted extensions are `.png`, `.svg` and `.xpm`. If no valid file is found, the endpoint returns a placeholder image.
 
+## Updates and install by name
+
+Both are Advanced Mode features and are refused with 403 in Simple Mode, for the same reason as the package list: working on the repository database is a system-level act the simple view stays out of.
+
+- `GET /api/updates` is read-only and reports, per manager, what can be updated: apt gives an exact list from a dry run, Flatpak and Snap give the applications that have a newer version or revision. The manager detection flags come along so the page can explain a manager that is not installed.
+- `POST /api/updates/run` takes a manager and a step. `refresh` (apt only) updates the package lists; `update` runs the manager's update. Every run goes through the same install lock and job state as an installation.
+- `GET /api/apt/search` searches the apt repositories by name for the install-by-name box on the Apps page.
+- `POST /api/packages/install` installs a package by its repository name through one of the three managers. The name must pass the manager's shape check before the privileged command is built.
+
 ## HTTP and web interface
 
-Flask serves the pages and static assets in `static/`. JSON endpoints cover browser preferences, lists, file detection, installation, downloads, launching, removal and operation status. Browser code sends paths and explicit choices, but the server revalidates archive selection, removal paths, ownership, view mode and operation inputs.
+Flask serves the pages and static assets in `static/`. The server is waitress when it is installed — threaded, and it stays alive across the long package operations — with the Flask development server as a fallback. JSON endpoints cover browser preferences, lists, file detection, installation, downloads, launching, removal and operation status. Browser code sends paths and explicit choices, but the server revalidates archive selection, removal paths, ownership, view mode and operation inputs.
 
 `app.py` caps request bodies with `MAX_CONTENT_LENGTH = 256 * 1024`. When the installed Flask version supports it, `TRUSTED_HOSTS` accepts only `127.0.0.1`, `localhost`, `::1` and `[::1]`. This prevents a page on the internet from reaching the local service with an invalid `Host` header.
 
@@ -179,8 +192,10 @@ The server listens on `127.0.0.1` by default. Environment variables can change t
 
 - External processes use argument arrays without `shell=True`; HTTP requests also use `urllib`.
 - apt/dpkg and snap operations normally require administrator access. SLPM does not store a password in a form or terminal; the request passes through polkit or `sudo`, and SLPM reads only the result.
+- A name that is about to go onto a privileged command line must pass its manager's shape check in `slpm/proc.py` (`is_apt_pkg`, `is_flatpak_app_id`, `is_snap_name`) on every privilege path, so the check holds no matter which endpoint or module built the command.
 - `slpm/helper.py` accepts only explicitly allowlisted `apt-get`, `dpkg` and `snap` command shapes over a restricted socket. Package names and paths are checked with a restricted pattern, and arguments that could become options or have shell-like forms are rejected.
-- Flags such as `--force-yes`, `--force-all` and `--force-remove-essential` are rejected. If the helper does not accept a command, the main process falls back to polkit or `sudo`; the helper allowlist therefore does not cover every possible invocation.
+- Flags are judged by allowlist, not denylist: each command shape accepts only the flags SLPM itself sends (for apt-get: `-y`, `-f`, `--allow-downgrades`, and removal-only `--allow-remove-essential`). A denylist can never be complete — both apt and dpkg accept `-o`, and through it a caller can hand apt a script to run as root (`DPkg::Pre-Install-Pkgs`).
+- If the helper does not accept a command (refusal code 126), the main process falls back to polkit or `sudo`. That fallback is safe only because the argv it receives is always one SLPM itself built from validated input — a browser request can never choose the argv — and the polkit dialog asks a person to confirm it.
 - Removing a package in Advanced Mode requires typing its exact name. If `dpkg-query` reports a package as Essential, `apt.py` adds the real `--allow-remove-essential` option only to a remove or purge command. The helper accepts this option only for removal, never for install or update.
 - The AppImage removal path must stay inside the user's home directory, and launcher removal is allowed only for a `.desktop` file under `~/.local/share/applications`.
 - Warnings about system components and essential packages must be taken seriously. An incorrect removal can stop programs, make the operating system unbootable or permanently break package management.
@@ -203,13 +218,14 @@ Important paths:
 
 ## Verification and maintenance
 
-`selftest.py` checks sensitive behaviour without installing or removing a package: `Exec=` parsing, desktop-entry visibility, Simple/Advanced filtering, ownership evidence and the dpkg log anchor, snap seed data, Flatpak timestamps, package safety classification, file detection, archive extraction, user-choice validation, startup flags and overrides, the helper allowlist, the real `--allow-remove-essential` option, command probing and translations.
+`selftest.py` checks sensitive behaviour without installing or removing a package: `Exec=` parsing, desktop-entry visibility, Simple/Advanced filtering, ownership evidence and the dpkg log anchor, snap seed data, Flatpak timestamps, package safety classification, file detection, archive extraction (including archives whose paths would climb out of the destination), user-choice validation, startup flags and overrides, the name-shape validators, icon and download path guards, the helper allowlist, the real `--allow-remove-essential` option, command probing, translations in the backend and the browser, and the HTTP endpoints' refusal behaviour through Flask's test client.
 
-Run it after every change with:
+Most checks are machine-independent and run anywhere. A few read this machine's real state — the dpkg log, the installed apps, the startup entries — to prove the classifier works end to end; they run by default and are skipped on a clean machine with:
 
 ```bash
 source .venv/bin/activate
 .venv/bin/python selftest.py
+.venv/bin/python selftest.py --skip-machine   # CI mode
 ```
 
 The project has no database schema or migration layer. Changes to package-manager behaviour should stay in the corresponding `slpm/` module and be covered by focused automated tests and manual review of the sensitive path before the UI or documentation is changed.

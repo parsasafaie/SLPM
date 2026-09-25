@@ -1,30 +1,29 @@
 """AppImage: install to ~/Applications, extract an icon, register a .desktop shortcut."""
 import os
+import posixpath
 import re
 import shutil
 import tempfile
+import tarfile
+import zipfile
 from pathlib import Path
 
-from . import desktop, proc
-from .i18n import tr as _tr
+from . import desktop, proc, util
 
-
-def _t(english, **values):
-    """Translate a message into the language of the request being served."""
-    return _tr(proc.lang(), english, **values)
+_t = proc.t
 
 TARGET_DIR = Path.home() / "Applications"
 
 
 def _slug(name):
+    """A short, file-safe name for an AppImage: architecture and version dropped."""
     stem = re.sub(r"[-_.]?(x86_64|amd64|aarch64|arm64|i386|i686)\b", "", name, flags=re.I)
     stem = re.sub(r"[-_.]?v?\d+(\.\d+){1,3}.*$", "", stem)
-    stem = re.sub(r"[^A-Za-z0-9._-]+", "-", stem).strip("-")
-    return (stem or "app")[:48]
+    return util.slug(stem, "app")[:48]
 
 
 def _appimage_meta(path, tmpdir):
-    """Ask the AppImage to unpack itself; return (name, icon_path, exec_rel)."""
+    """Ask the AppImage to unpack itself; return (name, icon_path, payload_root, error)."""
     AppImage = Path(path).resolve()
     os.chmod(AppImage, 0o755)
     # --appimage-extract is supported by type-2 AppImages and needs no sandbox.
@@ -180,13 +179,92 @@ def is_archive(name):
     return name.lower().endswith(_ARCHIVE_SUFFIXES)
 
 
+def _member_escapes(base, name, target=None):
+    """Would this archive member - or, for a link, where the link points - land
+    outside base?
+
+    Judged with path algebra only (normpath), because the members do not exist yet:
+    an absolute name, a ".." that climbs past base, or a link whose resolved target
+    points outside base all count as escaping.
+    """
+    base = posixpath.normpath(str(base))
+    if not name or name.startswith("/"):
+        return True
+    path = posixpath.normpath(posixpath.join(base, name))
+    if path != base and not path.startswith(base + "/"):
+        return True
+    if target is None:
+        return False
+    if target.startswith("/"):
+        target = posixpath.normpath(target)
+    else:
+        target = posixpath.normpath(posixpath.join(posixpath.dirname(path), target))
+    return target != base and not target.startswith(base + "/")
+
+
+def _tar_members_escape(path, dest):
+    """None if every member of a tar archive stays inside dest, else an error message.
+
+    The check mirrors what tarfile's "data" filter rejects - absolute paths, ".."
+    climbing out, links that point out - and refuses special files (devices, fifos),
+    which a user archive has no business containing.
+    """
+    escape = _t("The archive contains paths that would be written outside the "
+                "destination folder.")
+    unsafe = _t("The archive could not be extracted safely.")
+    try:
+        with tarfile.open(path) as tf:
+            members = tf.getmembers()
+    except Exception:
+        # A compression the stdlib cannot read (e.g. .tar.zst on an old interpreter):
+        # list the members through the system tar and judge that instead.
+        if not proc.which("tar"):
+            return unsafe
+        rc, out, _ = proc.run(["tar", "-tf", str(path)], timeout=120)
+        if rc != 0:
+            return unsafe
+        for name in proc.lines(out):
+            if _member_escapes(dest, name):
+                return escape
+        return None
+    for m in members:
+        if not (m.isfile() or m.isdir() or m.issym() or m.islnk()):
+            return unsafe
+        target = m.linkname if (m.issym() or m.islnk()) else None
+        if _member_escapes(dest, m.name, target):
+            return escape
+    return None
+
+
+def _zip_members_escape(path, dest):
+    """Same judgment for a zip, over the entry names."""
+    try:
+        with zipfile.ZipFile(path) as zf:
+            names = zf.namelist()
+    except (zipfile.BadZipFile, OSError):
+        return None  # unreadable header: the extractor below will report its own error
+    for name in names:
+        if _member_escapes(dest, name):
+            return _t("The archive contains paths that would be written outside the "
+                      "destination folder.")
+    return None
+
+
 def extract(path, dest):
-    """Extract into dest. Returns (ok, message, dest)."""
+    """Extract into dest. Returns (ok, message, dest).
+
+    Every member is checked to stay inside dest before anything is written: a
+    malicious or broken archive whose paths climb out (a "tar slip") is refused
+    rather than unpacked where it points.
+    """
     path = Path(path).expanduser().resolve()
     dest = Path(dest).expanduser().resolve()
     dest.mkdir(parents=True, exist_ok=True)
     low = path.name.lower()
     if low.endswith(".zip"):
+        problem = _zip_members_escape(path, dest)
+        if problem:
+            return False, problem, dest
         tool = None
         for cand in ("unzip", "bsdtar", "7z"):
             if proc.which(cand):
@@ -198,8 +276,13 @@ def extract(path, dest):
                 "bsdtar": ["bsdtar", "-xf", str(path), "-C", str(dest)],
                 "7z": ["7z", "x", "-y", f"-o{dest}", str(path)]}[tool]
     elif low.endswith((".tar.gz", ".tgz", ".tar.xz", ".txz", ".tar.bz2", ".tar.zst", ".tar")):
+        problem = _tar_members_escape(path, dest)
+        if problem:
+            return False, problem, dest
         argv = ["tar", "-xf", str(path), "-C", str(dest)]
     elif proc.which("7z"):
+        # 7z itself refuses absolute paths and strips a leading drive on modern
+        # releases, so no member pre-check is possible for formats this branch takes.
         argv = ["7z", "x", "-y", f"-o{dest}", str(path)]
     else:
         return False, _t("This archive format needs the '7z' tool, which is not "
@@ -244,7 +327,10 @@ def find_launchers(root):
     for f in root.rglob("*"):
         if not f.is_file() or f.is_symlink():
             continue
-        rel = f.relative_to(root)
+        try:
+            rel = f.relative_to(root)
+        except ValueError:
+            continue  # a file that vanished or moved under us between the two passes
         # Skip a FHS-style payload tree, but a plain "bin" folder holding the app's
         # own launcher is normal and must not be skipped.
         if rel.parts[:2] == ("usr", "bin") or any(

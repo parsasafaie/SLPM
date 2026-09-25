@@ -186,14 +186,14 @@ async function addDialog() {
   $('#modal .body').innerHTML = `
     <p class="muted small">${esc(T('Pick the app to add as a startup app.'))}</p>
     <input id="cand-search" type="search" placeholder="${esc(T('Search apps…'))}"
-           autocomplete="off">
+           aria-label="${esc(T('Search apps…'))}" autocomplete="off">
     <div class="choices" id="cand-list"></div>`;
   const list = $('#cand-list');
   const paint = query => {
     const q = (query || '').toLowerCase();
     const hits = apps.filter(a =>
       !q || (a.name || '').toLowerCase().includes(q) ||
-      (a.exec || '').toLowerCase().includes(q));
+      (a.comment || '').toLowerCase().includes(q));
     list.innerHTML = '';
     if (!hits.length) {
       list.innerHTML = `<p class="small muted">${esc(T('No apps matched.'))}</p>`;
@@ -204,7 +204,10 @@ async function addDialog() {
       b.className = 'choice';
       b.innerHTML = `<strong></strong><small></small>`;
       $('strong', b).textContent = app.name;
-      $('small', b).textContent = app.exec;
+      // The command line is not part of the response any more: the server re-derives
+      // it from the app's desktop entry when the entry is added, so the dialog only
+      // shows what a human can recognise.
+      $('small', b).textContent = app.comment || '';
       b.onclick = () => submitAdd(app);
       list.appendChild(b);
     });
@@ -217,9 +220,10 @@ async function addDialog() {
 async function submitAdd(app) {
   closeModal();
   setLoading(true, T('Adding…'));
-  const r = await api('/api/startup/add', {
-    name: app.name, exec: app.exec, icon: app.icon, comment: app.comment,
-  });
+  // Only the id crosses the wire. The command line is re-derived on the server from
+  // its own app list: accepting an exec field made this endpoint a way to put any
+  // command on the user's auto-start list.
+  const r = await api('/api/startup/add', { id: app.id });
   setLoading(false);
   if (r.ok) toast(T('Added'), r.message, 'ok');
   else toast(T('Could not add'), [r.message, r.detail].filter(Boolean).join(' '), 'bad');

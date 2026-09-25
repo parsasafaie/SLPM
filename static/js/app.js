@@ -46,11 +46,21 @@ function esc(text) {
     c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
-/* modal({title, html, buttons:[{label, kind, onClick}], onOpen}) */
+/* modal({title, html, buttons:[{label, kind, onClick}], onOpen})
+
+   The dialog moves keyboard focus in on open and traps Tab inside until it closes,
+   then gives the focus back to whatever had it before. Without the trap, a keyboard
+   user tabbing through a remove dialog would walk straight into the page's controls,
+   where the same buttons exist with their full destructive power. */
+let lastFocused = null;
 function modal(opts) {
   const overlay = $('#overlay');
   const box = $('#modal');
   box.innerHTML = `<h3></h3><div class="body"></div><div class="footer"></div>`;
+  box.setAttribute('role', 'dialog');
+  box.setAttribute('aria-modal', 'true');
+  box.setAttribute('aria-label', opts.title || '');
+  box.tabIndex = -1;
   $('h3', box).textContent = opts.title || '';
   $('.body', box).innerHTML = opts.html || '';
   const footer = $('.footer', box);
@@ -61,14 +71,36 @@ function modal(opts) {
     btn.onclick = () => b.onClick ? b.onClick(box) : closeModal();
     footer.appendChild(btn);
   });
+  const focusables = () => $$('button, [href], input, select, textarea', box)
+    .filter(el => !el.disabled && el.offsetParent !== null);
+  lastFocused = document.activeElement;
   overlay.classList.remove('hidden');
   if (opts.onOpen) opts.onOpen(box);
+  requestAnimationFrame(() => {
+    const first = focusables()[0] || box;
+    first.focus();
+  });
+  box.onkeydown = e => {
+    if (e.key !== 'Tab') return;
+    const els = focusables();
+    if (!els.length) { e.preventDefault(); return; }
+    const first = els[0], last = els[els.length - 1];
+    if (e.shiftKey && (document.activeElement === first || document.activeElement === box)) {
+      e.preventDefault(); last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault(); first.focus();
+    }
+  };
   return box;
 }
 
 function closeModal() {
   $('#overlay').classList.add('hidden');
-  $('#modal').innerHTML = '';
+  const box = $('#modal');
+  box.innerHTML = '';
+  box.onkeydown = null;
+  if (lastFocused && document.contains(lastFocused)) lastFocused.focus();
+  lastFocused = null;
 }
 
 $('#overlay') && $('#overlay').addEventListener('click', e => {

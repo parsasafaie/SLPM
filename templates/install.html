@@ -39,7 +39,8 @@
     <h3>{{ t('Download and install') }}</h3>
     <p class="muted small">{{ t('Paste a link. SLPM downloads it in the background and tries to detect and install it when it finishes unless another file is selected.') }}</p>
     <div class="drop">
-      <input id="download-url" type="text" dir="ltr" placeholder="{{ t('Paste a download link, like https://example.com/app.AppImage') }}" autocomplete="off">
+      <input id="download-url" type="text" dir="ltr" placeholder="{{ t('Paste a download link, like https://example.com/app.AppImage') }}"
+             aria-label="{{ t('Download link') }}" autocomplete="off">
       <button class="btn btn-primary" id="download-btn" disabled>{{ t('Download') }}</button>
     </div>
     <div id="download-hint" class="detect"></div>
@@ -70,6 +71,10 @@
       <p>{{ t('Flatpak apps, when Flatpak is installed.') }}</p>
     </div>
     <div class="format">
+      <span class="tag ok">.snap</span>
+      <p>{{ t('Snap packages, when Snap is installed.') }}</p>
+    </div>
+    <div class="format">
       <span class="tag ok">.tar.gz / .zip</span>
       <p>{{ t('Archives. Extracted to a managed folder, then you choose what to add to the menu.') }}</p>
     </div>
@@ -84,7 +89,9 @@
       <p class="muted small" id="progress-note">{{ t('This can take a minute. Keep this window open.') }}</p>
     </div>
   </div>
-  <div class="bar"><div class="bar-fill"></div></div>
+  {# The bar is an indeterminate decoration; the state is the text above it, so the
+     bar itself stays out of the accessibility tree. #}
+  <div class="bar" aria-hidden="true"><div class="bar-fill"></div></div>
 </div>
 {% endblock %}
 

@@ -254,11 +254,11 @@ function makeRow() {
   row.innerHTML = `
     <div class="download-row-top">
       <div class="spinner small"></div>
-      <span class="download-name" tabindex="0"></span>
+      <span class="download-name"></span>
       <span class="download-meta"></span>
       <div class="download-actions"></div>
     </div>
-    <div class="bar"><div class="download-bar-fill"></div></div>`;
+    <div class="bar" aria-hidden="true"><div class="download-bar-fill"></div></div>`;
   downloadRows.appendChild(row);
   return row;
 }
@@ -292,7 +292,7 @@ function renderDone(d) {
   row.className = 'download-row download-done';
   row.innerHTML = `
     <span class="download-check" aria-hidden="true">✓</span>
-    <span class="download-name" tabindex="0">${esc(d.filename)}</span>
+    <span class="download-name">${esc(d.filename)}</span>
     <span class="download-meta">${T('Download complete')}</span>
     <div class="download-actions"></div>`;
   const actions = row.querySelector('.download-actions');
@@ -310,7 +310,7 @@ function renderFailed(d) {
   row.className = 'download-row download-done download-failed';
   row.innerHTML = `
     <span class="download-check fail" aria-hidden="true">✕</span>
-    <span class="download-name" tabindex="0">${esc(d.filename)}</span>
+    <span class="download-name">${esc(d.filename)}</span>
     <span class="download-meta">${esc(d.error || T('The download could not be completed.'))}</span>
     <div class="download-actions"></div>`;
   const actions = row.querySelector('.download-actions');

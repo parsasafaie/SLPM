@@ -13,18 +13,12 @@ not silently turn the program back on.
 """
 import os
 import re
-import shutil
-import tempfile
 from pathlib import Path
 from urllib.parse import quote
 
-from . import desktop, proc
-from .i18n import tr as _tr
+from . import desktop, proc, util
 
-
-def _t(english, **values):
-    """Translate a message into the language of the request being served."""
-    return _tr(proc.lang(), english, **values)
+_t = proc.t
 
 
 USER_AUTOSTART = Path.home() / ".config/autostart"
@@ -90,7 +84,7 @@ def _command_ok(argv):
 
 
 def _slug(name):
-    return re.sub(r"[^A-Za-z0-9._-]+", "-", name).strip("-").lower() or "app"
+    return util.slug(name)
 
 
 def _clean_field(text):
@@ -149,15 +143,6 @@ def _with_state(text, enabled):
             kept.append(f"{key}={flags[key]}")
 
     return "\n".join(lines[:start + 1] + kept + lines[end:]) + "\n"
-
-
-def _write(path, text):
-    """Replace a file atomically, so a half-written entry is never read back."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    fd, tmp = tempfile.mkstemp(dir=str(path.parent))
-    with os.fdopen(fd, "w") as fh:
-        fh.write(text)
-    shutil.move(tmp, path)
 
 
 def _collect_from(roots):
@@ -285,7 +270,7 @@ def add(name, exec_line, icon="", comment=""):
     while target.exists():
         target = USER_AUTOSTART / f"{base}-{counter}.desktop"
         counter += 1
-    _write(target, _body(name, command, icon, comment))
+    util.atomic_write(target, _body(name, command, icon, comment))
     return True, _t("{name} will now start when you log in.", name=name), ""
 
 
@@ -323,7 +308,7 @@ def set_enabled(entry_id, enabled):
             text = Path(rec["file"]).read_text(encoding="utf-8", errors="replace")
         except OSError as exc:
             return False, _t("This startup entry could not be read."), str(exc)
-        _write(USER_AUTOSTART / entry_id, _with_state(text, False))
+        util.atomic_write(USER_AUTOSTART / entry_id, _with_state(text, False))
         return True, _t("{name} will no longer start when you log in.",
                         name=rec["name"]), ""
 
@@ -333,13 +318,13 @@ def set_enabled(entry_id, enabled):
             text = Path(rec["file"]).read_text(encoding="utf-8", errors="replace")
         except OSError as exc:
             return False, _t("This startup entry could not be read."), str(exc)
-        _write(Path(rec["file"]), _with_state(text, True))
+        util.atomic_write(Path(rec["file"]), _with_state(text, True))
     else:
         try:
             text = Path(rec["file"]).read_text(encoding="utf-8", errors="replace")
         except OSError as exc:
             return False, _t("This startup entry could not be read."), str(exc)
-        _write(USER_AUTOSTART / entry_id, _with_state(text, True))
+        util.atomic_write(USER_AUTOSTART / entry_id, _with_state(text, True))
     return True, _t("{name} will now start when you log in.", name=rec["name"]), ""
 
 

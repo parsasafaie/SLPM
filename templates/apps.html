@@ -14,7 +14,8 @@
     <svg viewBox="0 0 24 24" class="search-icon" aria-hidden="true">
       <path d="M10 4a6 6 0 104.24 10.24l4.26 4.26 1.41-1.41-4.26-4.26A6 6 0 0010 4zm0 2a4 4 0 110 8 4 4 0 010-8z"/>
     </svg>
-    <input id="search" type="search" placeholder="{{ t('Search apps…') }}" autocomplete="off">
+    <input id="search" type="search" placeholder="{{ t('Search apps…') }}"
+           aria-label="{{ t('Search apps…') }}" autocomplete="off">
   </div>
   <select id="filter" class="select" aria-label="{{ t('Filter') }}">
     <option value="all">{{ t('All packages') }}</option>
@@ -25,6 +26,26 @@
   </select>
   <button class="btn btn-ghost" id="refresh">{{ t('Refresh') }}</button>
   <button class="btn btn-ghost hidden" id="cleanup">{{ t('Clean unused dependencies') }}</button>
+</div>
+
+{# Install by name: the Advanced Mode view of the package managers, so the card is
+   hidden in Simple Mode (apps.js follows the switch) rather than shown and then
+   refusing. apt search is the only manager with a search endpoint, so the suggestion
+   list appears next to the input only while apt is selected. #}
+<div class="card" id="install-box" hidden>
+  <h3>{{ t('Install a package') }}</h3>
+  <p class="muted small">{{ t('Install by name from a package manager. This works in Advanced Mode only.') }}</p>
+  <div class="install-row">
+    <select id="pkg-manager" class="select" aria-label="{{ t('Package manager') }}">
+      <option value="apt"{% if not env.managers.apt %} disabled{% endif %}>apt</option>
+      <option value="snap"{% if not env.managers.snap %} disabled{% endif %}>snap</option>
+      <option value="flatpak"{% if not env.managers.flatpak %} disabled{% endif %}>flatpak</option>
+    </select>
+    <input id="pkg-name" type="text" dir="ltr" placeholder="{{ t('Package name, like vlc') }}"
+           autocomplete="off" spellcheck="false">
+    <button class="btn btn-primary" id="pkg-install" disabled>{{ t('Install') }}</button>
+  </div>
+  <div id="pkg-search-results" class="pkg-results" role="list"></div>
 </div>
 
 <div id="list" class="list"></div>

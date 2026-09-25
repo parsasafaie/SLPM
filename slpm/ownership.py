@@ -274,6 +274,7 @@ def user_flatpak(app_id):
     return created - base > _INSTALL_WINDOW_DAYS * 86400
 
 
+@lru_cache(maxsize=4096)
 def owning_package(binary):
     """The installed package that provides this program, if any.
 
@@ -403,3 +404,4 @@ def reset_cache():
     _flatpak_times._at = 0.0
     installed_by_user_package.cache_clear()
     owning_package_of_file.cache_clear()
+    owning_package.cache_clear()
