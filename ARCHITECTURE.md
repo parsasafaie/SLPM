@@ -54,13 +54,13 @@ A background download thread does not inherit the Flask request's `ContextVar`; 
 
 ## Simple and Advanced modes
 
-View mode is a per-browser preference: the `slpm_mode` cookie is rendered onto `<html data-mode>` and remembered across visits. The default is `simple`. The first entry into Advanced Mode on each page load asks for confirmation because this mode can expose and remove system packages. The switch sits in the top bar next to the tabs and affects both Installed Apps and Startup Apps; the Install tab has no mode switch.
+View mode is a per-browser preference: the `slpm_mode` cookie is rendered onto `<html data-mode>` and remembered across visits. The default is `simple`. The first entry into Advanced Mode on each page load asks for confirmation because this mode can expose and remove system packages. The switch sits in the top bar next to the tabs and affects both Installed Apps and Startup Apps; the Install and Updates tabs have no mode switch, because they behave the same in either mode.
 
 Capabilities are enforced on the server:
 
 - In Simple Mode, `/api/apps` returns only applications for which `ownership.py` confirms a user install.
 - In Simple Mode, `/api/startup` returns only user-owned startup entries.
-- `/api/packages*`, `/api/apt/search`, `/api/updates` and `/api/updates/run` return 403 in Simple Mode. The 403 body carries an `advanced_only` flag so the browser can explain the refusal instead of showing a generic error.
+- `/api/packages*` and `/api/apt/search` return 403 in Simple Mode. The 403 body carries an `advanced_only` flag so the browser can explain the refusal instead of showing a generic error.
 - In Advanced Mode, the Installed Apps page uses `/api/packages` and shows the installed `dpkg`/`apt` packages, including pre-installed applications, libraries, system components and essential packages. Startup Apps collects both user entries and entries supplied by system packages.
 - Advanced Mode is not a unified list of every software source. The Installed Apps list is specifically the `dpkg`/`apt` package list, not a complete database of every package source.
 - In Simple Mode, `/api/uninstall` derives the target's ownership again from the simple list and rejects pre-installed applications. Startup enable and disable paths reject entries that are not user-owned.
@@ -171,10 +171,11 @@ Records are merged by filename, with higher-priority paths replacing lower-prior
 
 ## Updates and install by name
 
-Both are Advanced Mode features and are refused with 403 in Simple Mode, for the same reason as the package list: working on the repository database is a system-level act the simple view stays out of.
+Updates are a both-modes feature: an update brings installed items to their newest version and never removes anything, so the simple view is not kept out of it the way it is from the package database. Install by name works on the repository database and remains Advanced Mode only, refused with 403 in Simple Mode.
 
-- `GET /api/updates` is read-only and reports, per manager, what can be updated: apt gives an exact list from a dry run, Flatpak and Snap give the applications that have a newer version or revision. The manager detection flags come along so the page can explain a manager that is not installed.
-- `POST /api/updates/run` takes a manager and a step. `refresh` (apt only) updates the package lists; `update` runs the manager's update. Every run goes through the same install lock and job state as an installation.
+- `GET /api/updates` is read-only and reports, per manager, what can be updated: apt gives an exact list from a dry run, Flatpak and Snap give the applications that have a newer version or revision. Each snap item also carries a `running` flag from a single `/proc` scan that maps every readable process to its executable path, so the page can mark snaps that still have live processes. The manager detection flags come along so the page can explain a manager that is not installed.
+- `POST /api/updates/run` takes a manager and a step. `refresh` (apt only) updates the package lists; `update` runs the manager's update. With a `name` it updates one item instead of the whole manager (for apt, pinned to the exact version the list showed); the name must pass the manager's shape check before any command is built. Every run goes through the same install lock and job state as an installation.
+- A failed run reports the tail of the tool's output — the last few lines, capped in length — rather than a single line, so the browser can show the explanatory error the tool printed instead of a bare list of process ids.
 - `GET /api/apt/search` searches the apt repositories by name for the install-by-name box on the Apps page.
 - `POST /api/packages/install` installs a package by its repository name through one of the three managers. The name must pass the manager's shape check before the privileged command is built.
 
@@ -218,7 +219,7 @@ Important paths:
 
 ## Verification and maintenance
 
-`selftest.py` checks sensitive behaviour without installing or removing a package: `Exec=` parsing, desktop-entry visibility, Simple/Advanced filtering, ownership evidence and the dpkg log anchor, snap seed data, Flatpak timestamps, package safety classification, file detection, archive extraction (including archives whose paths would climb out of the destination), user-choice validation, startup flags and overrides, the name-shape validators, icon and download path guards, the helper allowlist, the real `--allow-remove-essential` option, command probing, translations in the backend and the browser, and the HTTP endpoints' refusal behaviour through Flask's test client.
+`selftest.py` checks sensitive behaviour without installing or removing a package: `Exec=` parsing, desktop-entry visibility, Simple/Advanced filtering, ownership evidence and the dpkg log anchor, snap seed data, Flatpak timestamps, package safety classification, file detection, archive extraction (including archives whose paths would climb out of the destination), user-choice validation, startup flags and overrides, the name-shape validators, single-item update refusal, error-tail and running-snap detection, icon and download path guards, the helper allowlist, the real `--allow-remove-essential` option, command probing, translations in the backend and the browser, and the HTTP endpoints' refusal behaviour through Flask's test client.
 
 Most checks are machine-independent and run anywhere. A few read this machine's real state — the dpkg log, the installed apps, the startup entries — to prove the classifier works end to end; they run by default and are skipped on a clean machine with:
 
@@ -227,5 +228,7 @@ source .venv/bin/activate
 .venv/bin/python selftest.py
 .venv/bin/python selftest.py --skip-machine   # CI mode
 ```
+
+A GitHub Actions workflow (`.github/workflows/test.yml`) runs the same selftest with `--skip-machine` on Python 3.12 and 3.14 for every push and pull request, so the code is checked against the LTS Python and a clean machine, not only the developer's.
 
 The project has no database schema or migration layer. Changes to package-manager behaviour should stay in the corresponding `slpm/` module and be covered by focused automated tests and manual review of the sensitive path before the UI or documentation is changed.
