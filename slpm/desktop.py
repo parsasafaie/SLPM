@@ -317,6 +317,7 @@ def icon_path(icon_name, app_id=""):
         ICON_DIR / "scalable/apps",
         ICON_DIR / "48x48/apps",
         ICON_DIR / "256x256/apps",
+        Path("/usr/share/icons/hicolor/scalable/apps"),
         Path("/usr/share/icons/hicolor/256x256/apps"),
         Path("/usr/share/icons/hicolor/128x128/apps"),
         Path("/usr/share/icons/hicolor/64x64/apps"),
@@ -344,10 +345,14 @@ def icon_path(icon_name, app_id=""):
                 if resolved:
                     return resolved
     name = app_id or icon_name
-    rc, out, _ = proc.run(
-        ["find", "/usr/share/icons", str(ICON_DIR), "-iname", f"{name}.*",
-         "-o", "-iname", f"{icon_name}.*"], timeout=15
-    )
+    find_dirs = [d for d in ("/usr/share/icons", str(ICON_DIR)) if Path(d).is_dir()]
+    if find_dirs:
+        rc, out, _ = proc.run(
+            ["find", *find_dirs, "-iname", f"{name}.*",
+             "-o", "-iname", f"{icon_name}.*"], timeout=15
+        )
+    else:
+        rc, out = 1, ""
     if rc == 0:
         for line in proc.lines(out):
             line = line.strip()

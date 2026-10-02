@@ -97,7 +97,7 @@ def apps(mode="simple"):
         # Everything in this list is an application the user can see in their menu, so
         # everything in it can be removed from here - snap and flatpak included, through
         # their own manager.
-        rec["removable"] = bool(meta) or manager == "appimage"
+        rec["removable"] = bool(meta) or manager == "appimage" or rec["id"].startswith("slpm-")
         rec["icon_url"] = (f"/api/icon?name={quote(rec['icon'])}&app={quote(rec['id'])}"
                            if rec["icon"] else "")
         rows.append(rec)

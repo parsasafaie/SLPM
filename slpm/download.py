@@ -151,6 +151,7 @@ class DownloadJob:
         _id_counter[0] += 1
         self.id = f"{_id_counter[0]}-{threading.get_ident()}"
         self.url = url
+        self.lang = proc.lang()
         self.state = "queued"          # queued, running, paused, done, failed, stopped
         self.downloaded = 0
         self.total = None
@@ -159,7 +160,7 @@ class DownloadJob:
         self.filename = _filename_from_url(url)
         dest = _downloads_dir() / self.filename
         try:
-            dest.mkdir(parents=True, exist_ok=True)
+            dest.parent.mkdir(parents=True, exist_ok=True)
         except OSError:
             pass
         self.path = str(_unique_path(dest))
@@ -189,6 +190,8 @@ class DownloadJob:
         self._thread.start()
 
     def _run(self):
+        _lang_ctx.set(self.lang)
+        proc.set_lang(self.lang)
         while True:
             with self._lock:
                 state = self.state

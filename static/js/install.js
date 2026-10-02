@@ -266,7 +266,7 @@ function makeRow() {
 function renderActive(d) {
   let row = downloadRows.querySelector(`.download-row[data-active="${d.id}"]`);
   if (!row) { row = makeRow(); row.dataset.active = d.id; }
-  row.querySelector('.spinner').classList.toggle('hidden', d.state !== 'paused');
+  row.querySelector('.spinner').classList.toggle('hidden', d.state === 'paused');
   row.querySelector('.download-name').textContent = d.filename;
   row.querySelector('.download-actions').innerHTML = '';
 
@@ -300,7 +300,7 @@ function renderDone(d) {
   stop.addEventListener('click', () => { row.remove(); doneIds.delete(d.id); });
   actions.appendChild(stop);
   downloadRows.appendChild(row);
-  if (!downloadBar.classList.contains('hidden')) downloadBar.classList.remove('hidden');
+  downloadBar.classList.remove('hidden');
   // A finished download stays visible even when another file prevents auto-install.
   if (pathInput && d.path) installSavedFile(d);
 }

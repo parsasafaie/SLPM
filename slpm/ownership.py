@@ -32,6 +32,7 @@ first arrived, compared against the date the operating system was installed:
 Everything is cached: the log is millions of bytes and is read once per process, and
 the answer cannot change while SLPM is running without a new install happening.
 """
+import gzip
 import re
 import shutil
 import time
@@ -109,7 +110,13 @@ def _build_log_dates():
     dates = {}
     earliest = None
 
-    files = [Path(p) for p in DPKG_LOGS if Path(p).exists()]
+    files = []
+    for p in DPKG_LOGS:
+        path = Path(p)
+        if path.exists():
+            files.append(path)
+        elif Path(f"{p}.gz").exists():
+            files.append(Path(f"{p}.gz"))
 
     # The anchor is only trustworthy when the log reaches back to the machine's very
     # first dpkg action, and two things have to hold for that:
@@ -126,16 +133,25 @@ def _build_log_dates():
     # Both checks are cheap and both fail closed: no evidence, no anchor, and every
     # package is then reported as unclassifiable rather than guessed at.
     reached_start = False
-    if files and not Path(DPKG_LOGS[0]).exists():
+    oldest_missing = not Path(DPKG_LOGS[0]).exists() and not Path(f"{DPKG_LOGS[0]}.gz").exists()
+    if files and oldest_missing:
         try:
-            with files[0].open(encoding="utf-8", errors="replace") as fh:
-                reached_start = _INSTALLER_MARKER in fh.readline()
+            if files[0].suffix == ".gz":
+                with gzip.open(files[0], "rt", encoding="utf-8", errors="replace") as fh:
+                    reached_start = _INSTALLER_MARKER in fh.readline()
+            else:
+                with files[0].open(encoding="utf-8", errors="replace") as fh:
+                    reached_start = _INSTALLER_MARKER in fh.readline()
         except OSError:
             reached_start = False
 
     for path in files:
         try:
-            text = path.read_text(encoding="utf-8", errors="replace")
+            if path.suffix == ".gz":
+                with gzip.open(path, "rt", encoding="utf-8", errors="replace") as fh:
+                    text = fh.read()
+            else:
+                text = path.read_text(encoding="utf-8", errors="replace")
         except OSError:
             continue
         for line in text.splitlines():

@@ -759,8 +759,10 @@ def _log_action(kind, target, ok, message):
         except OSError:
             pass
         with open(state.ACTIONS_LOG, "a") as fh:
+            lines = (message or "").splitlines()
+            first_line = lines[0][:200] if lines else ""
             fh.write(f"{_now()}\t{kind}\t{target}\t{'ok' if ok else 'failed'}\t"
-                     f"{(message or '').splitlines()[0][:200]}\n")
+                     f"{first_line}\n")
     except OSError:
         pass
 
