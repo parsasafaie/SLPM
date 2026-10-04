@@ -95,6 +95,10 @@
       en: 'The Startup Apps page in Advanced Mode, listing user and packaged startup entries with each entry’s enabled state and a control for turning entries off.',
       fa: 'صفحهٔ برنامه‌های استارتاپ در حالت پیشرفته؛ موردهای کاربری و موردهای ارائه‌شده توسط بستهٔ سیستمی را همراه با وضعیت فعال یا غیرفعال و کنترل غیرفعال‌کردن نشان می‌دهد.',
     },
+    shortcuts: {
+      en: 'The Shortcuts page in Simple Mode, listing the entries that appear in the applications menu, with search and filters, an Add shortcut button, and details and delete actions per entry.',
+      fa: 'صفحهٔ میان‌برها در حالت ساده؛ موارد منوی برنامه‌ها را فهرست می‌کند، همراه با جست‌وجو و فیلترها، دکمهٔ افزودن میان‌بر و دکمه‌های جزئیات و حذف برای هر مورد.',
+    },
     advanced: {
       en: 'The Installed Apps page in Advanced Mode, listing installed apt/dpkg packages, including libraries, system components and essential packages.',
       fa: 'صفحهٔ برنامه‌های نصب‌شده در حالت پیشرفته؛ بسته‌های نصب‌شدهٔ apt/dpkg، از جمله کتابخانه‌ها، اجزای سیستمی و بسته‌های حیاتی سیستم را فهرست می‌کند.',

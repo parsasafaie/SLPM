@@ -320,6 +320,51 @@ const SLPM = (() => {
     'Could not add': 'افزوده نشد',
     'No startup programs matched.': 'برنامهٔ استارتاپ پیدا نشد.',
 
+    /* ------------------------------------------------------- shortcuts.js */
+    'All desktop entries, including hidden and system components.':
+      'همهٔ موارد دسکتاپ، از جمله اجزای پنهان و سیستمی.',
+    ['Application shortcuts that appear in your menu. Switch to Advanced Mode to see '
+      + 'all desktop entries.']:
+      'میان‌برهای برنامه‌ها که در منوی شما نمایش داده می‌شوند. برای مشاهدهٔ همهٔ موارد دسکتاپ به حالت پیشرفته بروید.',
+    'Reading shortcuts…': 'در حال خواندن میان‌برها…',
+    'Could not list shortcuts': 'فهرست میان‌برها خوانده نشد',
+    ['No shortcuts added yet. Switch to Advanced Mode to see all desktop '
+      + 'entries.']:
+      'هنوز میان‌بری اضافه نشده است. برای دیدن همهٔ موارد دسکتاپ به حالت پیشرفته بروید.',
+    'No shortcuts matched.': 'میان‌بری پیدا نشد.',
+    'hidden': 'پنهان',
+    'Hidden': 'پنهان',
+    'Visible in menu': 'نمایش در منو',
+    'Delete': 'حذف',
+    'File': 'فایل',
+    'Categories': 'دسته‌بندی‌ها',
+    'Terminal': 'ترمینال',
+    'Yes': 'بله',
+    'No': 'خیر',
+    'Delete shortcut {name}?': 'میان‌بر {name} حذف شود؟',
+    'This shortcut will be removed from your applications menu.':
+      'این میان‌بر از منوی برنامه‌های شما حذف خواهد شد.',
+    'Deleting…': 'در حال حذف…',
+    'Deleted': 'حذف شد',
+    'Could not delete shortcut': 'میان‌بر حذف نشد',
+    'Add a shortcut': 'افزودن میان‌بر',
+    'Program name': 'نام برنامه',
+    'Program name, like My App': 'نام برنامه، مثل برنامهٔ من',
+    'Command to run, like /usr/bin/python3 app.py':
+      'دستور برای اجرا، مثل /usr/bin/python3 app.py',
+    'Browse…': 'انتخاب…',
+    'Optional description or comment': 'توضیحات یا نظر اختیاری',
+    'Icon': 'آیکون',
+    'Icon name or path to image': 'نام آیکون یا مسیر تصویر',
+    'Category': 'دسته‌بندی',
+    'Run in terminal': 'اجرا در ترمینال',
+    'Create shortcut': 'ساخت میان‌بر',
+    'Could not add shortcut': 'افزودن میان‌بر انجام نشد',
+    'This program has no name, so it cannot be added.':
+      'این برنامه نامی ندارد، بنابراین نمی‌توان آن را اضافه کرد.',
+    'This program has no command to run.':
+      'این برنامه دستوری برای اجرا ندارد.',
+
     /* The theme button's own label. The language button is labelled in the template,
        because the server knows the current language while it renders the page. */
     'Switch to dark theme': 'تغییر به تم تاریک',
@@ -421,6 +466,12 @@ const SLPM = (() => {
      'از این پس، $1 هنگام ورود به سیستم اجرا نمی‌شود.'],
     [/^(.+) was removed from your startup apps\.$/,
      '$1 از برنامه‌های استارتاپ حذف شد.'],
+    [/^Shortcut for (.+) was created\.$/,
+     'میان‌بر برای $1 ساخته شد.'],
+    [/^(.+) was removed from your shortcuts\.$/,
+     '$1 از میان‌برهای شما حذف شد.'],
+    [/^(.+) was removed from your menu\.$/,
+     '$1 از منوی شما حذف شد.'],
   ];
 
   /** Translate one string (and any {name} values) into the current language. */

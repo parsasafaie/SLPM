@@ -31,6 +31,7 @@
   <nav class="tabs">
     <a href="{{ url_for('page_install') }}" class="tab {{ 'active' if page == 'install' }}">{{ t('Install') }}</a>
     <a href="{{ url_for('page_apps') }}" class="tab {{ 'active' if page == 'apps' }}">{{ t('Installed Apps') }}</a>
+    <a href="{{ url_for('page_shortcuts') }}" class="tab {{ 'active' if page == 'shortcuts' }}">{{ t('Shortcuts') }}</a>
     <a href="{{ url_for('page_startup') }}" class="tab {{ 'active' if page == 'startup' }}">{{ t('Startup Apps') }}</a>
     <a href="{{ url_for('page_updates') }}" class="tab {{ 'active' if page == 'updates' }}">{{ t('Updates') }}</a>
     {# The Simple/Advanced switch lives in the tab row because it is not a property of
@@ -39,7 +40,7 @@
        nothing to switch - installing a file and updating what is already installed
        work the same in either mode - so the control is not rendered there at all
        rather than sitting there doing nothing. #}
-    {% if page in ('apps', 'startup') %}
+    {% if page in ('apps', 'startup', 'shortcuts') %}
     <div class="mode-switch" role="group" aria-label="{{ t('View mode') }}">
       <button type="button" class="mode-btn {{ 'active' if mode == 'simple' }}"
               data-mode="simple" aria-pressed="{{ 'true' if mode == 'simple' else 'false' }}">{{ t('Simple') }}</button>

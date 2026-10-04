@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}{{ t('Shortcuts') }} - SLPM{% endblock %}
+
+{% block content %}
+<section class="hero row-between">
+  <div>
+    <h2>{{ t('Shortcuts') }}</h2>
+    <p class="muted" id="subtitle">{{ t('Application shortcuts in your menu.') }}</p>
+  </div>
+  <button class="btn btn-primary" id="add">{{ t('Add shortcut') }}</button>
+</section>
+
+<div class="card toolbar">
+  <div class="search-wrap">
+    <svg viewBox="0 0 24 24" class="search-icon" aria-hidden="true">
+      <path d="M10 4a6 6 0 104.24 10.24l4.26 4.26 1.41-1.41-4.26-4.26A6 6 0 0010 4zm0 2a4 4 0 110 8 4 4 0 010-8z"/>
+    </svg>
+    <input id="search" type="search" placeholder="{{ t('Search shortcuts…') }}"
+           aria-label="{{ t('Search shortcuts…') }}" autocomplete="off">
+  </div>
+  <select id="filter" class="select" aria-label="{{ t('Filter') }}">
+    <option value="all">{{ t('All shortcuts') }}</option>
+    <option value="user">{{ t('Added by you') }}</option>
+    <option value="system">{{ t('System') }}</option>
+    <option value="flatpak">Flatpak</option>
+    <option value="snap">Snap</option>
+  </select>
+  <button class="btn btn-ghost" id="refresh">{{ t('Refresh') }}</button>
+</div>
+
+<div id="list" class="list"></div>
+<div id="empty" class="empty hidden">
+  <h3>{{ t('Nothing to show') }}</h3>
+  <p class="muted" id="empty-note">{{ t('No shortcuts matched.') }}</p>
+</div>
+<div id="loader" class="loader hidden"><div class="spinner"></div><span>{{ t('Reading shortcuts…') }}</span></div>
+{% endblock %}
+
+{% block scripts %}<script src="{{ url_for('static', filename='js/shortcuts.js') }}"></script>{% endblock %}

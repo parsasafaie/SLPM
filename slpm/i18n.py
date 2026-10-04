@@ -438,6 +438,23 @@ _FA = {
         "هنوز برنامهٔ استارتاپ اضافه نکرده‌اید. برای دیدن برنامه‌های استارتاپ سیستم، به حالت پیشرفته بروید.",
     "No startup apps matched.": "برنامهٔ استارتاپ پیدا نشد.",
 
+    # --------------------------------------------------------------- shortcuts
+    "Shortcuts": "میان‌برها",
+    "Application shortcuts in your menu.": "میان‌برهای برنامه‌ها در منوی شما.",
+    "Add shortcut": "افزودن میان‌بر",
+    "Search shortcuts…": "جست‌وجوی میان‌برها…",
+    "All shortcuts": "همهٔ میان‌برها",
+    "No shortcuts matched.": "میان‌بری پیدا نشد.",
+    "Reading shortcuts…": "در حال خواندن میان‌برها…",
+    "Shortcut for {name} was created.": "میان‌بر برای {name} ساخته شد.",
+    "This shortcut is no longer there.": "این میان‌بر دیگر وجود ندارد.",
+    "{name} was removed from your shortcuts.": "{name} از میان‌برهای شما حذف شد.",
+    "{name} was removed from your menu.": "{name} از منوی شما حذف شد.",
+    "Hidden": "پنهان",
+    "Visible in menu": "نمایش در منو",
+    "This shortcut is only hidden from the menu, so there is nothing to delete.":
+      "این میان‌بر فقط از منو پنهان شده است؛ چیزی برای حذف وجود ندارد.",
+
     # ----------------------------------------------------------------- updates
     "Updates": "به‌روزرسانی‌ها",
     "Available updates on this computer.":

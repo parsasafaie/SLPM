@@ -37,7 +37,7 @@ sys.path.insert(0, str(ROOT))
 SKIP_MACHINE = "--skip-machine" in sys.argv
 
 from slpm import (apps, apt, appimage, autostart, desktop, download, flatpak_snap,  # noqa: E402
-                  helper, i18n, installer, ownership as ow, proc)
+                  helper, i18n, installer, ownership as ow, proc, shortcuts as shortcuts_mod)
 
 # Runs inside node: collect every T()/TT()/tt() literal across all the page scripts,
 # check that each one is in the browser catalog, and that its {placeholder}s are
@@ -734,6 +734,75 @@ for _sentence in ("{name} will now start when you log in.",
           i18n.tr("fa", _sentence, name="vlc") != _sentence, True)
 
 
+# ----------------------------------------------------------------- shortcuts
+section("Shortcuts management")
+check("shortcut add requires name", shortcuts_mod.add("", "echo hi")[0], False)
+check("shortcut add requires command", shortcuts_mod.add("My App", "")[0], False)
+
+with tempfile.TemporaryDirectory() as tmp_sc:
+    real_user_apps = desktop.USER_APPS
+    real_app_dirs = desktop.APP_DIRS
+    desktop.USER_APPS = Path(tmp_sc)
+    desktop.APP_DIRS = (desktop.USER_APPS, *real_app_dirs[1:])
+    try:
+        ok, msg, _ = shortcuts_mod.add("Test Shortcut", "echo hi", comment="A test", categories=("Utility",))
+        check("shortcut add succeeds", ok, True)
+        entry_file = desktop.USER_APPS / "slpm-test-shortcut.desktop"
+        check("shortcut file created", entry_file.is_file(), True)
+        check("shortcut parsed name", desktop.parse(entry_file).get("Name"), "Test Shortcut")
+        check("shortcut parsed exec", desktop.parse(entry_file).get("Exec"), "echo hi")
+        rows = shortcuts_mod.collect("simple")
+        check("shortcut listed in simple mode", any(r["id"] == "slpm-test-shortcut.desktop" for r in rows), True)
+
+        # A command with arguments must not be quoted as one path, even though it
+        # starts with "/" and contains a space.
+        shortcuts_mod.add("Arg App", "/bin/ls Documents")
+        arg_file = desktop.USER_APPS / "slpm-arg-app.desktop"
+        check("command arguments survive add", desktop.parse(arg_file).get("Exec"), "/bin/ls Documents")
+        # A real path that contains spaces does get quoted.
+        spaced = Path(tmp_sc) / "my tool"
+        spaced.write_text("#!/bin/sh\n", encoding="utf-8")
+        shortcuts_mod.add("Spaced App", str(spaced))
+        spaced_file = desktop.USER_APPS / "slpm-spaced-app.desktop"
+        check("real spaced path is quoted", desktop.parse(spaced_file).get("Exec"), f'"{spaced}"')
+
+        # Removing a system shortcut hides it with a marker file; removing again must
+        # refuse instead of deleting the marker, which would put the app back.
+        fake_sys = Path(tmp_sc) / "system-apps"
+        fake_sys.mkdir()
+        (fake_sys / "slpm-demo-shortcut.desktop").write_text(
+            "[Desktop Entry]\nType=Application\nName=Demo Shortcut\n"
+            "Exec=/bin/ls\nIcon=utilities-terminal\n", encoding="utf-8")
+        desktop.APP_DIRS = (desktop.USER_APPS, fake_sys, *real_app_dirs[2:])
+        desktop.bust_collect_cache()
+        ok, _, _ = shortcuts_mod.remove("slpm-demo-shortcut.desktop")
+        check("system shortcut is hidden on remove", ok, True)
+        hidden_row = next((r for r in shortcuts_mod.collect("advanced")
+                           if r["id"] == "slpm-demo-shortcut.desktop"), {})
+        check("hidden system shortcut is not removable", hidden_row.get("removable"), False)
+        check("hidden system shortcut cannot launch", hidden_row.get("can_launch"), False)
+        ok, _, _ = shortcuts_mod.remove("slpm-demo-shortcut.desktop")
+        check("deleting a hiding marker is refused", ok, False)
+        check("hiding marker survives", (desktop.USER_APPS / "slpm-demo-shortcut.desktop").is_file(), True)
+        # A system entry that ships Hidden=true but with a real Exec line must not
+        # offer Launch (/api/launch would answer "no longer installed").
+        (fake_sys / "slpm-demo-hidden.desktop").write_text(
+            "[Desktop Entry]\nType=Application\nName=Demo Hidden\n"
+            "Exec=/bin/ls\nIcon=utilities-terminal\nHidden=true\n", encoding="utf-8")
+        desktop.bust_collect_cache()
+        hidden_row = next((r for r in shortcuts_mod.collect("advanced")
+                           if r["id"] == "slpm-demo-hidden.desktop"), {})
+        check("Hidden system entry is not launchable", hidden_row.get("can_launch"), False)
+        check("Hidden system entry is not removable", hidden_row.get("removable"), False)
+
+        ok, msg, _ = shortcuts_mod.remove("slpm-test-shortcut.desktop")
+        check("shortcut remove succeeds", ok, True)
+        check("shortcut file removed", entry_file.exists(), False)
+    finally:
+        desktop.USER_APPS = real_user_apps
+        desktop.APP_DIRS = real_app_dirs
+        desktop.bust_collect_cache()
+
 # ------------------------------------------------------- helper allowlist
 
 section("Privileged helper allowlist")
@@ -1126,6 +1195,16 @@ r = client.post("/api/download/start",
 check("downloading from the metadata address is a 400", r.status_code, 400)
 r = client.post("/api/download/start", json={"url": "file:///etc/passwd"})
 check("a non-web scheme is a 400", r.status_code, 400)
+
+r = client.get("/shortcuts")
+check("GET /shortcuts returns 200", r.status_code, 200)
+r = client.get("/api/shortcuts")
+check("GET /api/shortcuts returns 200", r.status_code, 200)
+check("GET /api/shortcuts returns ok", (r.get_json() or {}).get("ok"), True)
+r = client.post("/api/shortcuts/add", json={"name": "", "exec": ""})
+check("POST /api/shortcuts/add with empty name fails", (r.get_json() or {}).get("ok"), False)
+r = client.post("/api/shortcuts/remove", json={"id": "nonexistent.desktop"})
+check("POST /api/shortcuts/remove with nonexistent id fails", (r.get_json() or {}).get("ok"), False)
 
 print()
 if FAILED:

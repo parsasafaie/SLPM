@@ -8,12 +8,13 @@ A simple local web app for installing, viewing, launching, and removing Linux so
 
 ## Features
 
-- Simple and Advanced modes, switched from a control in the top bar on the tabs it applies to (Installed Apps and Startup Apps):
-  - **Simple Mode** (the default) lists only apps that SLPM can identify as user-installed, in both the Installed Apps and Startup Apps tabs. This includes relevant apps from apt/dpkg, Snap, Flatpak, and local desktop entries.
-  - **Advanced Mode** changes Installed Apps to the installed dpkg/apt package database, including pre-installed applications and system components, and makes relevant packaged Startup Apps entries visible. It is not a unified list of every software source.
+- Simple and Advanced modes, switched from a control in the top bar on the tabs it applies to (Installed Apps, Startup Apps, and Shortcuts):
+  - **Simple Mode** (the default) lists only apps that SLPM can identify as user-installed in the Installed Apps and Startup Apps tabs; the Shortcuts tab shows the entries that appear in your applications menu. This includes relevant apps from apt/dpkg, Snap, Flatpak, and local desktop entries.
+  - **Advanced Mode** changes Installed Apps to the installed dpkg/apt package database, including pre-installed applications and system components, makes relevant packaged Startup Apps entries visible, and shows the Shortcuts tab every desktop entry, including hidden and system components. It is not a unified list of every software source.
   - The Install and Updates tabs are identical in both modes.
 - Telling your apps from pre-installed ones is evidence-based: SLPM reads the package managers' own records — the date each dpkg package first appears in the dpkg log, the snap seed file, and the earliest modification time of the Flatpak deployment commit directories. It does not infer ownership from where a desktop entry lives or from dpkg `.list` file dates, because those signals can mislead.
 - A Startup Apps tab for viewing, adding, and turning off user-owned or packaged startup entries
+- A Shortcuts tab for managing the application menu: launch an entry, inspect its details, delete your own shortcuts, and hide pre-installed ones from your menu without touching system files. You can also create a shortcut for any program — pick its file with the file chooser, then set the name, icon, category, or run-in-terminal flag
 - An Updates tab (both modes) that lists what apt, Flatpak, and Snap each have available: expand a manager's list, update one item or the whole manager at once, and refresh the apt package lists. A snap that is still running is marked, and SLPM asks you to close it before updating it; a failed run shows the full error, not just a single line
 - Install by name (Advanced Mode only): search the apt repositories as you type, or install an apt package, a snap, or a Flatpak app by its exact name
 - Support for `.deb`, `.snap`, AppImage, `.flatpakref`, several archive formats, and `.run`/`.sh` files that can be registered without being executed — opening a local file or downloading one from a link
@@ -51,7 +52,7 @@ source .venv/bin/activate
 python selftest.py
 ```
 
-The selftest is a plain script, no test framework. It covers the parsing and safety logic (Exec= handling, desktop filtering, the root helper's command allowlist, archive path checks, the HTTP endpoints' refusal behaviour, and the translation catalogs in both the backend and the browser). A few checks read this machine's real state — the dpkg log, the installed apps, the startup entries — to prove the ownership classifier works end to end. On a machine where that state is not interesting (CI, a fresh container), skip them with:
+The selftest is a plain script, no test framework. It covers the parsing and safety logic (Exec= handling, desktop filtering, shortcut creation and removal rules, the root helper's command allowlist, archive path checks, the HTTP endpoints' refusal behaviour, and the translation catalogs in both the backend and the browser). A few checks read this machine's real state — the dpkg log, the installed apps, the startup entries — to prove the ownership classifier works end to end. On a machine where that state is not interesting (CI, a fresh container), skip them with:
 
 ```bash
 python selftest.py --skip-machine

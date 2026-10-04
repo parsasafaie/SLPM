@@ -46,6 +46,7 @@ A background download thread does not inherit the Flask request's `ContextVar`; 
 - `slpm/apps.py`: combines desktop entries and package-manager metadata and builds the simple list according to the ownership result.
 - `slpm/ownership.py`: decides whether the user installed an application or startup entry, or whether it came with the system.
 - `slpm/autostart.py`: reads `/etc/xdg/autostart` and `~/.config/autostart`, adds startup applications and enables or disables each entry.
+- `slpm/shortcuts.py`: the Shortcuts tab — collects the application-menu entries for each view mode from the shared desktop scan, creates user shortcuts in `~/.local/share/applications`, and removes or hides them.
 - `slpm/download.py`: downloads a URL into the Downloads folder with one background thread per job, resume support and background status reporting.
 - `slpm/proc.py`: the general subprocess boundary, using argument arrays, fixed timeouts, a normalised environment and structured `(return code, stdout, stderr)` results.
 - `slpm/helper.py`: a short-lived Unix-socket bridge for package operations with administrator access, started through polkit or `sudo`.
@@ -60,6 +61,7 @@ Capabilities are enforced on the server:
 
 - In Simple Mode, `/api/apps` returns only applications for which `ownership.py` confirms a user install.
 - In Simple Mode, `/api/startup` returns only user-owned startup entries.
+- In Simple Mode, `/api/shortcuts` returns the entries that pass the menu-visibility check plus every non-hidden user-owned entry, so the user's own shortcuts stay manageable even when they would not pass it (a run-in-terminal shortcut, for example). In Advanced Mode it returns every scanned entry, including hidden ones, each marked as such.
 - `/api/packages*` and `/api/apt/search` return 403 in Simple Mode. The 403 body carries an `advanced_only` flag so the browser can explain the refusal instead of showing a generic error.
 - In Advanced Mode, the Installed Apps page uses `/api/packages` and shows the installed `dpkg`/`apt` packages, including pre-installed applications, libraries, system components and essential packages. Startup Apps collects both user entries and entries supplied by system packages.
 - Advanced Mode is not a unified list of every software source. The Installed Apps list is specifically the `dpkg`/`apt` package list, not a complete database of every package source.
@@ -108,6 +110,16 @@ Disabling an entry depends on its source:
 - Enabling the entry again changes both keys in the user file back to `true`.
 
 These operations do not require `root` and never launch a program. Removal only deletes a user file; a packaged entry must be disabled rather than deleted.
+
+## Application shortcuts
+
+`slpm/shortcuts.py` serves the Shortcuts tab from the same desktop scan the application list uses, so both views describe one set of files and a change made on one tab is visible on the other. Simple Mode shows what the applications menu shows; Advanced Mode shows every scanned entry, including hidden ones, each marked as such.
+
+`POST /api/shortcuts/add` writes a new entry into `~/.local/share/applications` under an `slpm-` name, numbered when the name is already taken. Every field is stripped of newlines and control characters first, because a newline inside a value would inject another key into the `.desktop` file. A command that is one absolute path containing spaces is wrapped in quotes — and only that case: quoting a command like `/usr/bin/python3 app.py` as a whole would fuse program and argument into a filename that does not exist. If the command points at a file that lacks execute permission, the permission is granted. Nothing is executed and no administrator access is needed.
+
+`POST /api/shortcuts/remove` accepts only a bare `.desktop` file name — path separators are rejected, so the request cannot reach outside the applications directory. A user file is deleted. A system entry is never modified; SLPM writes a user override with `Hidden=true` and `NoDisplay=true` — the same pattern the startup tab uses — and the entry disappears from the applications menu. Deleting that override would put the system entry back into the menu, the opposite of what was asked, so the endpoint refuses to remove a hiding marker and the page does not offer Delete for a hidden entry at all.
+
+Launching and icons reuse the existing guarded endpoints: launch goes through `/api/launch` and its id resolution against the server's own scan, so `/api/shortcuts` reports a hidden entry as not launchable, because the launch endpoint would only answer that the app is no longer installed.
 
 ## Local file installation
 
@@ -199,6 +211,7 @@ The server listens on `127.0.0.1` by default. Environment variables can change t
 - If the helper does not accept a command (refusal code 126), the main process falls back to polkit or `sudo`. That fallback is safe only because the argv it receives is always one SLPM itself built from validated input — a browser request can never choose the argv — and the polkit dialog asks a person to confirm it.
 - Removing a package in Advanced Mode requires typing its exact name. If `dpkg-query` reports a package as Essential, `apt.py` adds the real `--allow-remove-essential` option only to a remove or purge command. The helper accepts this option only for removal, never for install or update.
 - The AppImage removal path must stay inside the user's home directory, and launcher removal is allowed only for a `.desktop` file under `~/.local/share/applications`.
+- Shortcut creation writes a user-level `.desktop` file only; it needs no administrator access and executes nothing. The remove endpoint accepts a bare file name only and stays inside `~/.local/share/applications`; system files are never modified — hiding writes a user override instead — and every field written into a generated `.desktop` file is cleaned of newlines, so a value cannot forge additional keys.
 - Warnings about system components and essential packages must be taken seriously. An incorrect removal can stop programs, make the operating system unbootable or permanently break package management.
 
 ## State and concurrency
@@ -219,7 +232,7 @@ Important paths:
 
 ## Verification and maintenance
 
-`selftest.py` checks sensitive behaviour without installing or removing a package: `Exec=` parsing, desktop-entry visibility, Simple/Advanced filtering, ownership evidence and the dpkg log anchor, snap seed data, Flatpak timestamps, package safety classification, file detection, archive extraction (including archives whose paths would climb out of the destination), user-choice validation, startup flags and overrides, the name-shape validators, single-item update refusal, error-tail and running-snap detection, icon and download path guards, the helper allowlist, the real `--allow-remove-essential` option, command probing, translations in the backend and the browser, and the HTTP endpoints' refusal behaviour through Flask's test client.
+`selftest.py` checks sensitive behaviour without installing or removing a package: `Exec=` parsing, desktop-entry visibility, Simple/Advanced filtering, ownership evidence and the dpkg log anchor, snap seed data, Flatpak timestamps, package safety classification, file detection, archive extraction (including archives whose paths would climb out of the destination), user-choice validation, startup flags and overrides, shortcut creation and removal (argument-preserving `Exec=` quoting, hiding markers that refuse a second removal), the name-shape validators, single-item update refusal, error-tail and running-snap detection, icon and download path guards, the helper allowlist, the real `--allow-remove-essential` option, command probing, translations in the backend and the browser, and the HTTP endpoints' refusal behaviour through Flask's test client.
 
 Most checks are machine-independent and run anywhere. A few read this machine's real state — the dpkg log, the installed apps, the startup entries — to prove the classifier works end to end; they run by default and are skipped on a clean machine with:
 

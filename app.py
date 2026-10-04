@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from slpm import apps as apps_mod
 from slpm import (apt, autostart, desktop, flatpak_snap, download, helper,
-                  installer, i18n, proc, state)
+                  installer, i18n, proc, shortcuts as shortcuts_mod, state)
 
 log = logging.getLogger("slpm")
 
@@ -149,6 +149,11 @@ def page_install():
 @app.route("/apps")
 def page_apps():
     return render_template("apps.html", page="apps", env=_env())
+
+
+@app.route("/shortcuts")
+def page_shortcuts():
+    return render_template("shortcuts.html", page="shortcuts", env=_env())
 
 
 @app.route("/startup")
@@ -461,6 +466,54 @@ def api_startup_remove():
         return _err(exc)
 
 
+# ------------------------------------------------------------------ shortcuts
+
+@app.get("/api/shortcuts")
+def api_shortcuts():
+    """Application shortcuts in the current view (simple: menu visible, advanced: all)."""
+    try:
+        mode = _ui_mode()
+        return jsonify({"ok": True, "mode": mode, "shortcuts": shortcuts_mod.collect(mode)})
+    except Exception as exc:
+        return _err(exc)
+
+
+@app.post("/api/shortcuts/add")
+def api_shortcuts_add():
+    """Create a new desktop shortcut in ~/.local/share/applications."""
+    data = request.json or {}
+    name = str(data.get("name") or "").strip()
+    exec_line = str(data.get("exec") or "").strip()
+    comment = str(data.get("comment") or "").strip()
+    icon = str(data.get("icon") or "").strip()
+    category = str(data.get("category") or "Utility").strip()
+    terminal = bool(data.get("terminal"))
+    try:
+        ok, msg, detail = shortcuts_mod.add(
+            name=name,
+            exec_line=exec_line,
+            icon=icon,
+            comment=comment,
+            categories=(category,) if category else ("Utility",),
+            terminal=terminal,
+        )
+        return jsonify({"ok": ok, "message": msg, "detail": detail})
+    except Exception as exc:
+        return _err(exc)
+
+
+@app.post("/api/shortcuts/remove")
+def api_shortcuts_remove():
+    """Delete a user shortcut or hide a system shortcut from the user menu."""
+    data = request.json or {}
+    entry_id = str(data.get("id") or "").strip()
+    try:
+        ok, msg, detail = shortcuts_mod.remove(entry_id)
+        return jsonify({"ok": ok, "message": msg, "detail": detail})
+    except Exception as exc:
+        return _err(exc)
+
+
 # ---------------------------------------------------- installed (advanced)
 
 @app.get("/api/packages")
@@ -726,7 +779,7 @@ def api_status():
     return jsonify({"ok": True, "busy": _job, "env": _env()})
 
 
-@app.post("/api/pick")
+@app.route("/api/pick", methods=["GET", "POST"])
 def api_pick():
     """Native file chooser, when one is available. Falls back to typing a path."""
     for tool in (["zenity", "--file-selection",
