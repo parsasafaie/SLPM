@@ -154,7 +154,10 @@ jobs:
               # containers; the same AppRun runs in both modes. AppRun keeps
               # the server in its foreground, so it runs in the background of
               # this script and is taken down by the server kill at the end.
-              "./$appimage" --appimage-extract-and-run &
+              # </dev/null: bash is reading this very script from stdin, so
+              # the backgrounded image must not inherit it and race for the
+              # remaining lines.
+              "./$appimage" --appimage-extract-and-run </dev/null &
               launcher=$!
 
               ok=""
@@ -213,8 +216,9 @@ jobs:
         if: github.event_name == 'release'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "${{ steps.version.outputs.tag }}" \
-             "SLPM_${{ steps.version.outputs.version }}-x86_64.AppImage" --clobber
+        run: |
+          gh release upload "${{ steps.version.outputs.tag }}" \
+            "SLPM_${{ steps.version.outputs.version }}-x86_64.AppImage" --clobber
 
       - name: Upload build artifact (manual runs)
         if: github.event_name != 'release'
