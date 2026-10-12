@@ -206,7 +206,7 @@ jobs:
                 sleep 0.5
               done
               ! kill -0 "$launcher" 2>/dev/null
-            SCRIPT
+          SCRIPT
           done
 
       - name: Upload to release assets
