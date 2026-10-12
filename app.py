@@ -23,9 +23,23 @@ app.config["JSON_SORT_KEYS"] = False
 app.config["MAX_CONTENT_LENGTH"] = 256 * 1024
 # Flask >= 3.1 rejects requests whose Host header is not in this list. Without it a
 # page on another origin can reach the local server through DNS rebinding, and every
-# endpoint here acts on the user's machine. (On an older Flask the key is simply
-# ignored, which is why requirements pins Flask >= 3.1.)
+# endpoint here acts on the user's machine. On an older Flask the key is simply
+# ignored, so _reject_foreign_hosts() below repeats the check on every version - the
+# repeat is what makes the Debian package safe with python3-flask 3.0 from older
+# releases (e.g. Ubuntu 24.04 LTS).
 app.config["TRUSTED_HOSTS"] = ["127.0.0.1", "localhost", "[::1]", "::1"]
+
+
+@app.before_request
+def _reject_foreign_hosts():
+    """Same host allowlist as TRUSTED_HOSTS, but enforced on every Flask version."""
+    host = (request.host or "").split("%", 1)[0].strip().lower()  # drop a IPv6 zone id
+    if host.startswith("["):
+        host = host[:host.rindex("]") + 1] if "]" in host else host
+    elif host.count(":") == 1:  # host:port; a bare IPv6 literal keeps its colons
+        host = host.rsplit(":", 1)[0]
+    if host not in app.config["TRUSTED_HOSTS"]:
+        return jsonify({"ok": False, "message": "Untrusted Host header."}), 400
 
 LANG_COOKIE = "slpm_lang"
 THEME_COOKIE = "slpm_theme"

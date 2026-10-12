@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Name=SLPM
+Name[fa]=اس‌ال‌پی‌ام
+GenericName=Package Manager
+GenericName[fa]=مدیر بسته
+Comment=Install, launch and remove Linux applications through a local web interface
+Comment[fa]=نصب، اجرا و حذف برنامه‌های لینوکس از طریق رابط وب محلی
+Exec=slpm
+Icon=slpm
+Terminal=false
+Categories=System;PackageManager;
+Keywords=package;install;software;apt;flatpak;snap;startup;shortcut;
+StartupNotify=true

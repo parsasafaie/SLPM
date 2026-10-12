@@ -25,25 +25,56 @@ SLPM یک برنامهٔ وب محلی برای نصب، مشاهده، اجرا
 
 ## پیش‌نیازها
 
-- لینوکس با محیط دسکتاپ
-- Python 3.9 یا جدیدتر
-- `pkexec` یا `sudo` برای عملیات سطح سیستم
+- توزیعی از لینوکس با محیط دسکتاپ. AppImage منتشرشده برای معماری **x86_64** ساخته می‌شود و مفسر Python خودش را همراه دارد؛ پس چیزی از انبارهای توزیع لازم نیست. روی اوبونتو ۲۲.۰۴، دبیان ۱۲ و اوبونتو ۲۴.۰۴ آزموده شده (به یادداشت‌های انتشار نگاه کنید)؛ توزیع‌های قدیمی‌تر آزموده نشده‌اند، چون به نسخهٔ glibc موردنیاز مفسر همراه بستگی دارند.
+- `pkexec` یا `sudo` برای عملیات سطح سیستم — SLPM فقط هنگام عملیاتی که به آن نیاز دارد رمز مدیر را می‌پرسد، و مدیرهای بسته‌ای که به‌کار می‌گیرد (`apt`، Flatpak، Snap) در زمان اجرا تشخیص داده می‌شوند و اختیاری‌اند.
 
 ## نصب
 
-دستورهای زیر را در ترمینال اجرا کنید:
+روش نصب پیشنهادی (و تنها روش بسته‌بندی‌شده) یک فایل AppImage است:
+
+1. فایل `SLPM_v0.1.0-x86_64.AppImage` را از [Releases](https://github.com/parsasafaie/SLPM/releases/latest) بگیرید.
+2. آن را قابل‌اجراکندید — در مدیر فایل، *Properties → Permissions* و تیک *Allow executing*، یا در ترمینال:
+   ```bash
+   chmod +x SLPM_v0.1.0-x86_64.AppImage
+   ```
+3. آن را اجرا کنید — دوبارکلیک در مدیر فایل، یا:
+   ```bash
+   ./SLPM_v0.1.0-x86_64.AppImage
+   ```
+
+نصب همین است: بدون ریشه، بدون وابستگی، و بدون هیچ نوشته‌ای در سراسر سیستم. اگر [AppImageLauncher](https://github.com/TheAssassin/AppImageLauncher) یا دسکتاپی که آن را پیشنهاد می‌کند داشته باشید، نخستین اجرا می‌تواند SLPM را به منوی برنامه‌ها هم بیفزاید؛ در غیر این صورت چیزی در منو نصب نمی‌شود.
+
+### اجرا
+
+AppImage را اجرا کنید (دوبارکلیک یا فرمان بالا). SLPM سرور محلی خود را با کاربر عادی شما راه می‌اندازد و <http://127.0.0.1:8686> را در مرورگر باز می‌کند؛ اجرای دوباره، سرور درحال‌اجرا را تشخیص می‌دهد و فقط همان صفحه را باز می‌کند. سرور تا وقتی AppImage در حال اجراست برپا می‌ماند و بستن مرورگر آن را متوقف نمی‌کند. برای متوقف‌کردن SLPM:
 
 ```bash
-sudo apt update && sudo apt install -y git python3 python3-venv  # Install Git, Python, and virtual-environment support
-git clone https://github.com/parsasafaie/SLPM.git  # Clone the repository
-cd SLPM  # Enter the project directory
-python3 -m venv .venv  # Create a virtual environment
-source .venv/bin/activate  # Activate the environment
-pip install -r requirements.txt  # Install dependencies
-python app.py  # Start the application
+kill "$(cat ~/.cache/slpm/server.pid)"
 ```
 
-سپس <http://127.0.0.1:8686> را در مرورگر باز کنید. سرور توسعه را فقط روی localhost نگه دارید و آن را در دسترس اینترنت یا شبکه قرار ندهید.
+(بستن AppImage از داک یا نوار وظیفهٔ دسکتاپ هم همین کار را می‌کند).
+
+عملیات‌هایی که به دسترسی مدیر نیاز دارند (نصب و حذف بسته‌ها، به‌روزرسانی سامانه) در همان لحظهٔ انجام پنجرهٔ رمز `pkexec` را نشان می‌دهند — SLPM هرگز با دسترسی ریشه اجرا نمی‌شود و رمز شما را ذخیره نمی‌کند.
+
+### به‌روزرسانی
+
+فایل AppImage نسخهٔ جدیدتر را بگیرید و به‌جای فایل قبلی اجرایش کنید. سرور محلی با نسخه‌ای اجرا می‌ماند که با آن راه افتاده، پس نخست SLPM را همان‌طور که بالا گفته شد متوقف کنید (راه‌اندازی دوبارهٔ سیستم هم همین اثر را دارد). تنظیمات و تاریخچهٔ شما (زیر `~/.cache/slpm`) حفظ می‌شود. فایل AppImage قدیمی هر وقت خواستید حذفش کنید — خودکفاست.
+
+### حذف
+
+حذف‌کننده لازم نیست: سرور را همان‌طور که بالا گفته شد متوقف کنید، فایل AppImage را حذف کنید، و اگر گزارش عملیات را هم نمی‌خواهید `~/.cache/slpm` را پاک کنید. چیزهایی که با SLPM ساخته‌اید (برنامه‌های نصب‌شده، میان‌برها، موردهای استارتاپ) سر جایشان می‌مانند.
+
+### اجرا از سورس (برای توسعه‌دهندگان)
+
+```bash
+sudo apt update && sudo apt install -y git python3 python3-venv
+git clone https://github.com/parsasafaie/SLPM.git
+cd SLPM
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+python app.py  # سرو در http://127.0.0.1:8686 — فقط localhost، هرگز روی شبکه قرارش ندهید
+```
 
 ## آزمون
 
@@ -69,7 +100,10 @@ slpm/               منطق بسته‌ها و ادغام با دسکتاپ
 templates/          قالب‌های HTML
 static/             فایل‌های CSS و جاوااسکریپت
 docs/               وب‌سایت GitHub Pages
-.github/            گردش‌کار CI (خودآزمون روی Python 3.12 و 3.14)
+appimage/           ورودی‌های ساخت AppImage (‏AppRun‏، مورد منو، آیکون،
+                    فرادادهٔ AppStream)
+.github/            گردش‌کار CI (خودآزمون) و گردش‌کار انتشار که برای هر
+                    GitHub Release فایل AppImage را می‌سازد
 selftest.py         اسکریپت خودآزمون (بدون نیاز به چارچوب آزمون)
 requirements.txt    وابستگی‌های Python
 ```

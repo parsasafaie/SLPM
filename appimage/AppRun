@@ -1,0 +1,71 @@
+#!/bin/bash
+# AppRun for the SLPM AppImage: open the page in the default browser and keep
+# the local server (running as the regular user) in the foreground of this
+# launcher until it stops. The launcher must outlive the server: an AppImage's
+# files only stay accessible while its runtime is alive, so backgrounding the
+# server and exiting would leave it running from deleted files.
+#
+# A second launch detects the running server and only reopens the page.
+# To stop SLPM:
+#   kill "$(cat "${XDG_CACHE_HOME:-$HOME/.cache}/slpm/server.pid")"
+set -u
+
+# APPDIR is set by the AppImage runtime; a directly executed AppRun still works.
+APPDIR="${APPDIR:-"$(dirname "$(readlink -f "$0")")"}"
+PY="$APPDIR/usr/bin/python3"
+APP="$APPDIR/usr/lib/slpm/app.py"
+URL=http://127.0.0.1:8686
+LOG_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/slpm"
+
+port_open() { (exec 3<>"/dev/tcp/127.0.0.1/8686") 2>/dev/null; }
+
+server=""
+
+open_page() {
+    if command -v xdg-open >/dev/null 2>&1; then
+        xdg-open "$URL" >/dev/null 2>&1 || true
+    else
+        echo "SLPM is running at $URL (no xdg-open found; open it in any browser)." >&2
+    fi
+}
+
+if port_open; then
+    open_page
+    exit 0
+fi
+
+[ -x "$PY" ] || { echo "slpm: bundled Python not found." >&2; exit 1; }
+mkdir -p "$LOG_DIR"
+# The CA bundle for the bundled interpreter's own downloads (urllib uses the
+# default SSL context); fall back to whatever the system provides.
+if cert="$("$PY" -c "import certifi; print(certifi.where())" 2>/dev/null)"; then :; fi
+# A sane PATH for the system tools SLPM drives (apt, flatpak, snap, pkexec,
+# xdg-open); no LD_LIBRARY_PATH, so those system binaries stay untouched.
+if [ -n "${cert:-}" ]; then
+    env SSL_CERT_FILE="$cert" PATH="/usr/local/bin:/usr/bin:/bin:$PATH" \
+        nohup "$PY" "$APP" >>"$LOG_DIR/server.log" 2>&1 &
+else
+    env PATH="/usr/local/bin:/usr/bin:/bin:$PATH" \
+        nohup "$PY" "$APP" >>"$LOG_DIR/server.log" 2>&1 &
+fi
+server=$!
+echo "$server" > "$LOG_DIR/server.pid"
+# The server must not outlive this launcher: once the AppImage's files are
+# gone, a surviving server would keep running from deleted files — API
+# endpoints already loaded would work, but lazily-loaded content (templates)
+# would not. Any way this launcher ends takes the server down with it.
+trap 'kill "$server" 2>/dev/null; wait "$server" 2>/dev/null' EXIT
+
+# Give it up to ~10 s before opening the browser; it must not open on a dead port.
+up=""
+for _ in $(seq 1 20); do
+    if port_open; then up=1; break; fi
+    kill -0 "$server" 2>/dev/null || break
+    sleep 0.5
+done
+[ -n "$up" ] && open_page
+
+# Keep this launcher (and with it the AppImage's files) alive while the server
+# runs. Stopping the server through the pid file, Ctrl+C or a session end all
+# take this process down with it.
+wait "$server"

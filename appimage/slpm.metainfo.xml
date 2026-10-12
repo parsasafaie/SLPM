@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.parsasafaie.SLPM</id>
+  <metadata_license>MIT</metadata_license>
+  <project_license>MIT</project_license>
+  <name>SLPM</name>
+  <summary>Simple Linux Package Manager</summary>
+  <summary xml:lang="fa">مدیر بستهٔ سادهٔ لینوکس</summary>
+  <description>
+    <p>A local web app for installing, viewing, launching and removing Linux
+    software without using package-manager commands directly. It recognises the
+    apps the user installed, manages start-up entries and application-menu
+    shortcuts, and installs local .deb, .snap, AppImage and archive files.</p>
+  </description>
+  <launchable type="desktop-id">slpm.desktop</launchable>
+  <url type="homepage">https://github.com/parsasafaie/SLPM</url>
+  <developer>
+    <name>Parsa Safaie</name>
+  </developer>
+  <provides>
+    <binary>slpm</binary>
+  </provides>
+</component>

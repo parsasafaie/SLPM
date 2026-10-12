@@ -25,25 +25,56 @@ A simple local web app for installing, viewing, launching, and removing Linux so
 
 ## Requirements
 
-- Linux desktop environment
-- Python 3.9 or newer
-- `pkexec` or `sudo` for package operations
+- A Linux distribution with a desktop environment. The released AppImage is built for **x86_64** and bundles its own Python, so nothing needs to be installed from your repositories. Verified on Ubuntu 22.04, Debian 12 and Ubuntu 24.04 (see the release notes); distributions older than those have not been tested, because they depend on the glibc version the bundled interpreter requires.
+- `pkexec` or `sudo` for package operations — SLPM asks for the administrator password only when an operation needs it, and the managers it drives (`apt`, Flatpak, Snap) are detected at runtime and are optional.
 
 ## Installation
 
-Run these commands in a terminal:
+The recommended (and only packaged) installation method is a single AppImage:
+
+1. Download `SLPM_v0.1.0-x86_64.AppImage` from [Releases](https://github.com/parsasafaie/SLPM/releases/latest).
+2. Make it executable — in the file manager's *Properties → Permissions* check *Allow executing*, or in a terminal:
+   ```bash
+   chmod +x SLPM_v0.1.0-x86_64.AppImage
+   ```
+3. Run it — double-click in the file manager, or:
+   ```bash
+   ./SLPM_v0.1.0-x86_64.AppImage
+   ```
+
+That's the whole installation: no root, no dependencies, nothing written system-wide. If you use [AppImageLauncher](https://github.com/TheAssassin/AppImageLauncher) or a desktop that offers it, the first run can also add SLPM to your applications menu; otherwise nothing is installed into the menu.
+
+### Launching
+
+Launch the AppImage (double-click or the command above). SLPM starts its local server under your own user and opens <http://127.0.0.1:8686> in your browser; launching it again detects the running server and just reopens the page. The server stays up for as long as the AppImage is running — closing the browser does not stop it. To stop SLPM:
 
 ```bash
-sudo apt update && sudo apt install -y git python3 python3-venv  # Install Git, Python, and virtual-environment support
-git clone https://github.com/parsasafaie/SLPM.git  # Clone the repository
-cd SLPM  # Enter the project directory
-python3 -m venv .venv  # Create a virtual environment
-source .venv/bin/activate  # Activate the environment
-pip install -r requirements.txt  # Install dependencies
-python app.py  # Start the application
+kill "$(cat ~/.cache/slpm/server.pid)"
 ```
 
-Open <http://127.0.0.1:8686> in your browser. Keep the development server on localhost and do not expose it publicly.
+(quitting the AppImage in your desktop's dock/taskbar does the same thing).
+
+Operations that need administrator access (package installation and removal, system updates) show a `pkexec` password dialog at the moment you perform them — SLPM never runs as root and never stores your password.
+
+### Updating
+
+Download the newer release's AppImage and run it instead of the old file. The local server keeps running the version it was started with, so stop SLPM first as shown above (a reboot has the same effect). Your settings and history (under `~/.cache/slpm`) are preserved. Delete the old AppImage file whenever you like — it is self-contained.
+
+### Uninstalling
+
+No uninstaller is needed: stop the server as shown above, delete the AppImage file, and — if you also want the operation log gone — delete `~/.cache/slpm`. Files SLPM created for you (installed applications, shortcuts, startup entries) are left in place.
+
+### Running from source (developers)
+
+```bash
+sudo apt update && sudo apt install -y git python3 python3-venv
+git clone https://github.com/parsasafaie/SLPM.git
+cd SLPM
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+python app.py  # serves http://127.0.0.1:8686 — localhost only, never expose it
+```
 
 ## Testing
 
@@ -69,7 +100,10 @@ slpm/               Package and desktop-integration logic
 templates/          HTML templates
 static/             CSS and JavaScript assets
 docs/               GitHub Pages website
-.github/            CI workflow (selftest on Python 3.12 and 3.14)
+appimage/           AppImage build inputs (AppRun, menu entry, icon,
+                    AppStream metadata)
+.github/            CI workflow (selftest) and the release workflow that
+                    builds the AppImage for each GitHub Release
 selftest.py         Self-check script (no test framework needed)
 requirements.txt    Python dependencies
 ```

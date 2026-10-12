@@ -1,0 +1,224 @@
+name: Release AppImage
+
+# Builds a self-contained AppImage from the release's tag and attaches it to
+# that release's assets. Python itself is bundled (python-build-standalone),
+# so SLPM does not depend on the interpreter or Python packages the target
+# distribution ships. Also runnable manually (workflow_dispatch) for test
+# builds; a manual run builds and smoke-tests the same file but uploads it as
+# a workflow artifact instead of touching a release.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  # Pinned so a build is reproducible. A newer release usually raises the
+  # glibc floor; bump deliberately, then re-check the container tests below
+  # against the oldest distribution you want to support.
+  PSA_RELEASE: "20250918"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Determine version
+        id: version
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = "release" ]; then
+            tag="$RELEASE_TAG"
+          else
+            tag="v0.1.0"
+          fi
+          version="${tag#v}"
+          # The AppImage file name is SLPM_<version>-x86_64.AppImage, so the
+          # name must match the tag exactly: <version> is the tag with a
+          # single leading "v" stripped, nothing else. The regex constrains
+          # the version's shape and the check below pins it to the tag, so
+          # any tag whose stripped form is not a plain, matching version
+          # (release-1.0, vv1.2, …) is rejected rather than shipped.
+          if ! [[ "$version" =~ ^[0-9]+(\.[0-9]+)*([~+.-][0-9A-Za-z.]+)?$ ]] \
+             || { [ "$tag" != "$version" ] && [ "$tag" != "v$version" ]; }; then
+            echo "::error::Tag '$tag' is not a valid version (expected e.g. v1.2.3)."
+            exit 1
+          fi
+          echo "AppImage will be named SLPM_${version}-x86_64.AppImage"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update -qq
+          # rsvg-convert renders the app icon into the PNG raster menus expect.
+          sudo apt-get install -y -qq librsvg2-bin
+
+      - name: Resolve bundled Python download URL
+        id: psa
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          url=$(gh api "repos/astral-sh/python-build-standalone/releases/tags/$PSA_RELEASE" \
+            --jq '.assets[]
+                  | select(.name | test("^cpython-3[.]12[.][0-9]+[+][0-9]+-x86_64-unknown-linux-gnu-install_only[.]tar[.]gz$"))
+                  | .browser_download_url' \
+            | head -n1)
+          if [ -z "$url" ]; then
+            echo "::error::No cpython-3.12 x86_64 install_only asset in PSA release $PSA_RELEASE."
+            exit 1
+          fi
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      - name: Assemble AppDir
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          PSA_URL: ${{ steps.psa.outputs.url }}
+        run: |
+          set -euo pipefail
+          AppDir="$PWD/SLPM.AppDir"
+
+          # Bundled interpreter under a standard /usr prefix, so sys.prefix,
+          # the stdlib and pip-installed packages all resolve inside the image.
+          mkdir -p "$AppDir/usr" "$AppDir/usr/lib/slpm"
+          curl -fsSL "$PSA_URL" -o /tmp/python.tar.gz
+          tar -xzf /tmp/python.tar.gz -C "$AppDir/usr" --strip-components=1
+
+          # Application dependencies and a CA bundle the interpreter can rely
+          # on regardless of the host distribution's certificate layout.
+          "$AppDir/usr/bin/python3" -m pip install --no-cache-dir \
+            "flask>=3.1,<4.0" "waitress>=2.1,<4.0" certifi
+          # AppImage tooling refuses its own build output if the tree carries
+          # world-writable bits or stale bytecode caches.
+          find "$AppDir" -type d -name __pycache__ -prune -exec rm -rf {} +
+
+          cp app.py "$AppDir/usr/lib/slpm/"
+          cp -r slpm templates static "$AppDir/usr/lib/slpm/"
+          find "$AppDir/usr/lib/slpm" -type d -name __pycache__ -prune \
+            -exec rm -rf {} +
+
+          install -D -m 644 appimage/slpm.metainfo.xml \
+            "$AppDir/usr/share/metainfo/io.github.parsasafaie.SLPM.metainfo.xml"
+          install -D -m 644 LICENSE "$AppDir/usr/share/doc/slpm/LICENSE"
+
+          # AppImage metadata at the AppDir root: the runtime and appimagetool
+          # both read them from here (Exec= is rewritten to the real path).
+          install -m 644 appimage/slpm.desktop "$AppDir/slpm.desktop"
+          install -m 755 appimage/AppRun "$AppDir/AppRun"
+          rsvg-convert -w 256 -h 256 appimage/slpm.svg -o "$AppDir/slpm.png"
+          chmod 644 "$AppDir/slpm.png"
+          ln -sf slpm.png "$AppDir/.DirIcon"
+
+      - name: Build AppImage
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          curl -fsSL -o appimagetool \
+            "https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage"
+          chmod +x appimagetool
+          # --appimage-extract-and-run: the runner has no FUSE.
+          ./appimagetool --appimage-extract-and-run SLPM.AppDir \
+            "SLPM_${VERSION}-x86_64.AppImage"
+
+      - name: Smoke test in clean containers
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          # Three general-purpose floors the AppImage must work on as
+          # downloaded, with no system Python involved. The oldest container
+          # exercises the glibc the bundled interpreter actually needs; the
+          # run must come from the extracted image, the auxiliary endpoints
+          # must answer, and a TLS download through SLPM's own API proves the
+          # CA bundle travelled with the interpreter.
+          for image in ubuntu:22.04 debian:12 ubuntu:24.04; do
+            echo "===== $image"
+            docker run --rm -i -e VERSION="$VERSION" -v "$PWD:/pkg" -w /pkg \
+              "$image" /bin/bash <<'SCRIPT'
+              set -euxo pipefail
+              export DEBIAN_FRONTEND=noninteractive
+              apt-get update -qq
+              apt-get install -y -qq --no-install-recommends curl ca-certificates
+
+              appimage="SLPM_${VERSION}-x86_64.AppImage"
+              test -f "$appimage"
+              # --appimage-extract-and-run stands in for FUSE, unavailable in
+              # containers; the same AppRun runs in both modes. AppRun keeps
+              # the server in its foreground, so it runs in the background of
+              # this script and is taken down by the server kill at the end.
+              "./$appimage" --appimage-extract-and-run &
+              launcher=$!
+
+              ok=""
+              for _ in $(seq 1 30); do
+                sleep 0.5
+                if curl -sf http://127.0.0.1:8686/api/status | grep -q '"ok"'; then
+                  ok=1; break
+                fi
+              done
+              test -n "$ok"
+
+              # The server process is the bundled interpreter running the
+              # installed app — not the container's own Python (the extract
+              # directory name differs between AppImageKit versions, so the
+              # command line, not the path prefix, is what is checked).
+              pid=$(cat "$HOME/.cache/slpm/server.pid")
+              cmdline=$(tr '\0' ' ' < "/proc/$pid/cmdline")
+              echo "$cmdline" | grep -qE '(appimage_extracted_[0-9a-f]+|squashfs-root)/usr/lib/slpm/app\.py'
+
+              # A foreign Host header must be refused (the DNS-rebinding guard).
+              ! curl -sf -o /dev/null -H "Host: evil.example" \
+                     http://127.0.0.1:8686/api/status
+
+              # Pages must render from inside the image: templates load
+              # lazily, so a broken extraction would pass the API checks and
+              # still fail here.
+              curl -sf http://127.0.0.1:8686/ | grep -q '<!doctype html>'
+
+              # Download over TLS through SLPM's own API: the bundled CA
+              # bundle must work without any host-installed Python.
+              curl -fsS -X POST -H 'Content-Type: application/json' \
+                http://127.0.0.1:8686/api/download/start \
+                -d '{"url": "https://www.python.org/robots.txt"}' \
+                | grep -q '"ok": *true'
+              dl=""
+              for _ in $(seq 1 20); do
+                sleep 0.5
+                if curl -sf http://127.0.0.1:8686/api/downloads | grep -q '"state": *"done"'; then
+                  dl=1; break
+                fi
+              done
+              test -n "$dl"
+              test -s "$HOME/Downloads/robots.txt"
+
+              # Stopping the server ends the launcher and, with it, the image.
+              kill "$pid"
+              for _ in $(seq 1 20); do
+                kill -0 "$launcher" 2>/dev/null || break
+                sleep 0.5
+              done
+              ! kill -0 "$launcher" 2>/dev/null
+            SCRIPT
+          done
+
+      - name: Upload to release assets
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ steps.version.outputs.tag }}" \
+             "SLPM_${{ steps.version.outputs.version }}-x86_64.AppImage" --clobber
+
+      - name: Upload build artifact (manual runs)
+        if: github.event_name != 'release'
+        uses: actions/upload-artifact@v4
+        with:
+          name: "SLPM_${{ steps.version.outputs.version }}-x86_64"
+          path: "SLPM_${{ steps.version.outputs.version }}-x86_64.AppImage"

@@ -113,15 +113,19 @@
       <span class="t-fa">راه‌اندازی SLPM</span>
     </h2>
 
-    <p class="after"><span class="t-en">Run these commands in a terminal to set up SLPM.</span><span class="t-fa">برای راه‌اندازی SLPM، دستورهای زیر را در ترمینال اجرا کنید.</span></p>
-    <div class="terminal"><div class="terminal-bar"><span></span><span></span><span></span></div><pre><code><span class="c-dim">$</span> sudo apt update && sudo apt install -y git python3 python3-venv  # Install Git, Python and venv
-<span class="c-dim">$</span> git clone https://github.com/parsasafaie/SLPM.git  # Clone the project
-<span class="c-dim">$</span> cd SLPM  # Enter the project folder
-<span class="c-dim">$</span> python3 -m venv .venv  # Create a virtual environment
-<span class="c-dim">$</span> source .venv/bin/activate  # Activate it
-<span class="c-dim">$</span> pip install -r requirements.txt  # Install dependencies
-<span class="c-dim">$</span> python app.py  # Start SLPM</code></pre></div>
-    <p class="after"><span class="t-en">Then open <span class="mono">http://127.0.0.1:8686</span> in your browser.</span><span class="t-fa">سپس <span class="mono">http://127.0.0.1:8686</span> را در مرورگر باز کنید.</span></p>
+    <p class="after"><span class="t-en">Download the single AppImage from
+      <a href="https://github.com/parsasafaie/SLPM/releases/latest">GitHub Releases</a
+      > (named <span class="mono">SLPM_v0.1.0-x86_64.AppImage</span>), make it executable and run it — no
+      dependencies, nothing installed system-wide:</span><span class="t-fa">فایل AppImage را از
+      <a href="https://github.com/parsasafaie/SLPM/releases/latest">Releases گیت‌هاب</a> بردارید (با نام
+      <span class="mono">SLPM_v0.1.0-x86_64.AppImage</span>)، قابل‌اجراکندید و اجرا کنید — بدون وابستگی،
+      بدون هیچ نصب سراسری:</span></p>
+    <div class="terminal"><div class="terminal-bar"><span></span><span></span><span></span></div><pre><code><span class="c-dim">$</span> chmod +x SLPM_v0.1.0-x86_64.AppImage
+<span class="c-dim">$</span> ./SLPM_v0.1.0-x86_64.AppImage</code></pre></div>
+    <p class="after"><span class="t-en">SLPM opens <span class="mono">http://127.0.0.1:8686</span> in your browser. To stop the background server:
+      <span class="mono">kill "$(cat ~/.cache/slpm/server.pid)"</span> — and removing SLPM is deleting the file.</span><span class="t-fa">SLPM
+      نشانی <span class="mono">http://127.0.0.1:8686</span> را در مرورگر باز می‌کند. برای توقف سرور پس‌زمینه:
+      <span class="mono">kill "$(cat ~/.cache/slpm/server.pid)"</span> — و حذف SLPM یعنی پاک‌کردن همان فایل.</span></p>
   </section>
 
   <!-- --------------------------------------------------------- features -->
