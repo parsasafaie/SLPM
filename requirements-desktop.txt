@@ -1,0 +1,16 @@
+# Optional extra for the desktop window (desktop_app.py). The web app itself
+# needs only requirements.txt.
+#
+# The window renders the UI with pywebview on top of the system WebKitGTK
+# runtime, which the desktop installs of Debian/Ubuntu/Fedora already ship.
+# On systems missing the pieces:
+#
+#   Python bindings (pywebview needs them outside the system interpreter):
+#     Debian/Ubuntu:  sudo apt install python3-gi python3-gi-cairo \
+#                       gir1.2-webkit2-4.1 libwebkit2gtk-4.1-0
+#     Fedora:         sudo dnf install python3-gobject webkit2gtk4.1-devel
+#
+# desktop_app.py finds the system's PyGObject automatically even when it runs
+# from a virtualenv, and with neither pywebview nor WebKitGTK it falls back to
+# opening the same interface in the default browser.
+pywebview>=4.0

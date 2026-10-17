@@ -39,6 +39,7 @@ A background download thread does not inherit the Flask request's `ContextVar`; 
 
 - `app.py`: the web layer — Flask entry point, routes, browser preferences (cookies), JSON/HTTP details and error boundaries. It builds `/api/icon` URLs from the icon name and id each scan row carries; the URL shape is the web layer's business.
 - `slpm/core.py`: the service layer between the interfaces and the domain modules — the exclusive install/removal job (`run_exclusive`), the Simple Mode ownership gate, the operation log and the environment summary. It imports no HTTP and builds no URL, so a desktop window or a CLI can call the very same logic.
+- `desktop_app.py`: the desktop window — pywebview (WebKitGTK) hosting the very web interface the browser shows. It starts or reuses a local server, resolves the initial language from `--lang`, `$SLPM_LANG`, `~/.config/slpm/prefs.json` or the system locale, seeds it once through `/api/prefs` so the in-app switch keeps working, and falls back to opening the default browser when pywebview or the GUI toolkit is unavailable (`requirements-desktop.txt` lists the optional dependencies). Nothing about the UI is re-implemented, so the desktop and web apps cannot drift apart.
 - `slpm/installer.py`: detects `.deb`, AppImage, Flatpak references, archives and executable files, then chooses the appropriate installation or registration path.
 - `slpm/apt.py`: reads `dpkg` data and installs or removes Debian packages.
 - `slpm/flatpak_snap.py`: finds installed Flatpak and Snap applications and performs their package operations.
