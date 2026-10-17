@@ -147,9 +147,13 @@ jobs:
           # extension and force exactly that path everywhere.
           find "$AppDir/usr/lib/python3" -name '_speedups*.so' -delete
 
-          cp app.py "$AppDir/usr/lib/slpm/"
+          # Files must land in the image executable regardless of the mode the
+          # checkout gave them (CI checks out 644; the packaging must not
+          # depend on it). AppRun-desktop runs them via python3, but the image
+          # is the contract - keep every shipped script executable.
+          install -m 755 app.py "$AppDir/usr/lib/slpm/app.py"
+          install -m 755 desktop_app.py "$AppDir/usr/lib/slpm/desktop_app.py"
           cp -r slpm templates static "$AppDir/usr/lib/slpm/"
-          cp desktop_app.py "$AppDir/usr/lib/slpm/"
           find "$AppDir/usr/lib/slpm" -type d -name __pycache__ -prune \
             -exec rm -rf {} +
 
