@@ -289,15 +289,21 @@ jobs:
 
               appimage="/pkg/SLPM-Desktop_${VERSION}-x86_64.AppImage"
               test -f "$appimage"
-              # Extract once for this test: --appimage-extract-and-run would
-              # extract into the CWD. First exercise the runtime's exec path
-              # without a GUI claim, then drive the extracted AppRun, which
-              # is the same script a FUSE mount would run.
+              # Exercise the runtime's exec path without a GUI claim first.
               "$appimage" --appimage-extract-and-run --help \
                 </dev/null 2>/dev/null | grep -q 'SLPM'
-              root=$(ls -d /tmp/squashfs-root)
+              # Extract deterministically: --appimage-extract always emits
+              # ./squashfs-root in the CWD, while the extracted-and-run mode
+              # creates — and deletes — a temp dir whose location varies with
+              # TMPDIR, so file assertions must never depend on it.
+              "$appimage" --appimage-extract >/dev/null
+              root=/tmp/squashfs-root
               test -x "$root/usr/lib/slpm/desktop_app.py"
-              test -d "$root/usr/lib/python3/pywebview"
+              test -f "$root/usr/lib/slpm/app.py"
+              # The pywebview distribution installs its package as 'webview'.
+              test -d "$root/usr/lib/python3/webview"
+              test -d "$root/usr/lib/python3/flask"
+              test -d "$root/usr/lib/python3/waitress"
 
               # The bundled pure-Python deps import under the HOST python,
               # and the WebKitGTK binding chain is complete on this floor.
