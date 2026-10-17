@@ -91,12 +91,14 @@
         <span class="t-fa">SLPM چیست؟</span>
       </h2>
       <p>
-        <span class="t-en">SLPM opens in your web browser and works on the same computer. You do not
+        <span class="t-en">SLPM runs on your own computer — either in your web browser, or in a native
+          desktop window over the same dashboard. You do not
           need to type <span class="mono">apt</span>, <span class="mono">snap</span>, or
           <span class="mono">flatpak</span> commands to install a file. In Simple Mode, Installed Apps
           uses the names and icons from your applications menu and shows the apps you installed;
           Advanced Mode opens the installed dpkg/apt package database.</span>
-        <span class="t-fa">SLPM در مرورگر اجرا می‌شود و روی همان کامپیوتر کار می‌کند. برای نصب فایل
+        <span class="t-fa">SLPM روی کامپیوتر خودتان اجرا می‌شود — چه در مرورگر، چه در یک پنجرهٔ بومی
+          دسکتاپ روی همان داشبورد. برای نصب فایل
           لازم نیست خودتان دستورهای <span class="mono">apt</span>، <span class="mono">snap</span> یا
           <span class="mono">flatpak</span> را اجرا کنید. در حالت ساده، تب «برنامه‌های نصب‌شده»
           نام و نماد برنامه‌ها را همان‌طور که در منوی برنامه‌ها می‌بینید نشان می‌دهد؛ در این حالت
@@ -113,19 +115,24 @@
       <span class="t-fa">راه‌اندازی SLPM</span>
     </h2>
 
-    <p class="after"><span class="t-en">Download the single AppImage from
-      <a href="https://github.com/parsasafaie/SLPM/releases/latest">GitHub Releases</a
-      > (named <span class="mono">SLPM_v0.1.0-x86_64.AppImage</span>), make it executable and run it — no
-      dependencies, nothing installed system-wide:</span><span class="t-fa">فایل AppImage را از
-      <a href="https://github.com/parsasafaie/SLPM/releases/latest">Releases گیت‌هاب</a> بردارید (با نام
-      <span class="mono">SLPM_v0.1.0-x86_64.AppImage</span>)، قابل‌اجراکندید و اجرا کنید — بدون وابستگی،
+    <p class="after"><span class="t-en">Each release ships two self-contained AppImages — download one from
+      <a href="https://github.com/parsasafaie/SLPM/releases/latest">GitHub Releases</a>, make it executable and run it — no
+      dependencies, nothing installed system-wide:</span><span class="t-fa">هر انتشار دو AppImage خودکفا عرضه می‌کند — یکی را از
+      <a href="https://github.com/parsasafaie/SLPM/releases/latest">Releases گیت‌هاب</a> بردارید، قابل‌اجراکندید و اجرا کنید — بدون وابستگی،
       بدون هیچ نصب سراسری:</span></p>
-    <div class="terminal"><div class="terminal-bar"><span></span><span></span><span></span></div><pre><code><span class="c-dim">$</span> chmod +x SLPM_v0.1.0-x86_64.AppImage
-<span class="c-dim">$</span> ./SLPM_v0.1.0-x86_64.AppImage</code></pre></div>
-    <p class="after"><span class="t-en">SLPM opens <span class="mono">http://127.0.0.1:8686</span> in your browser. To stop the background server:
-      <span class="mono">kill "$(cat ~/.cache/slpm/server.pid)"</span> — and removing SLPM is deleting the file.</span><span class="t-fa">SLPM
-      نشانی <span class="mono">http://127.0.0.1:8686</span> را در مرورگر باز می‌کند. برای توقف سرور پس‌زمینه:
-      <span class="mono">kill "$(cat ~/.cache/slpm/server.pid)"</span> — و حذف SLPM یعنی پاک‌کردن همان فایل.</span></p>
+    <ul class="tags" style="margin-bottom:.8rem">
+      <li>SLPM_0.2.0-x86_64.AppImage — <span class="t-en">dashboard in your browser</span><span class="t-fa">داشبورد در مرورگر</span></li>
+      <li>SLPM-Desktop_0.2.0-x86_64.AppImage — <span class="t-en">dashboard in a native window</span><span class="t-fa">داشبورد در یک پنجرهٔ بومی</span></li>
+    </ul>
+    <div class="terminal"><div class="terminal-bar"><span></span><span></span><span></span></div><pre><code><span class="c-dim">$</span> chmod +x SLPM-Desktop_0.2.0-x86_64.AppImage
+<span class="c-dim">$</span> ./SLPM-Desktop_0.2.0-x86_64.AppImage</code></pre></div>
+    <p class="after"><span class="t-en">The desktop image shows the dashboard in its own window (the system's WebKitGTK);
+      where WebKitGTK is missing it opens <span class="mono">http://127.0.0.1:8686</span> in your browser instead. To stop the
+      background server: <span class="mono">kill "$(cat ~/.cache/slpm/server.pid)"</span> — and removing SLPM is
+      deleting the file(s).</span><span class="t-fa">اپ‌ایمیج دسکتاپ داشبورد را در پنجرهٔ خودش نشان می‌دهد (با WebKitGTK
+      خود سیستم)؛ هرجا WebKitGTK نبود، نشانی <span class="mono">http://127.0.0.1:8686</span> را در مرورگر باز می‌کند. برای توقف
+      سرور پس‌زمینه: <span class="mono">kill "$(cat ~/.cache/slpm/server.pid)"</span> — و حذف SLPM یعنی پاک‌کردن همان
+      فایل‌ها.</span></p>
   </section>
 
   <!-- --------------------------------------------------------- features -->
