@@ -22,7 +22,6 @@ which is identical for `apt install ./vryon.deb` and for a package that shipped 
 the distribution.
 """
 from functools import lru_cache
-from urllib.parse import quote
 
 from . import apt, desktop, ownership, proc
 
@@ -98,8 +97,6 @@ def apps(mode="simple"):
         # everything in it can be removed from here - snap and flatpak included, through
         # their own manager.
         rec["removable"] = bool(meta) or manager == "appimage" or rec["id"].startswith("slpm-")
-        rec["icon_url"] = (f"/api/icon?name={quote(rec['icon'])}&app={quote(rec['id'])}"
-                           if rec["icon"] else "")
         rows.append(rec)
 
     return sorted(rows, key=lambda r: r["name"].lower())

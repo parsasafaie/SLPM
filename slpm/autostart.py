@@ -14,7 +14,6 @@ not silently turn the program back on.
 import os
 import re
 from pathlib import Path
-from urllib.parse import quote
 
 from . import desktop, proc, util
 
@@ -185,8 +184,6 @@ def _collect_from(roots):
                 # added through SLPM by the user.
                 "_shadows_packaged": source == "user" and path.name in packaged_names,
                 "_slpm_added": source == "user" and path.name.startswith(PREFIX),
-                "icon_url": (f"/api/icon?name={quote(icon)}&app={quote(path.name)}"
-                             if icon else ""),
             }
     return sorted(rows.values(), key=lambda r: r["name"].lower())
 

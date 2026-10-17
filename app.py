@@ -1,18 +1,25 @@
 #!/usr/bin/env python3
-"""SLPM - Simple Linux Package Manager. Flask entry point."""
+"""SLPM - Simple Linux Package Manager. Flask entry point.
+
+This is the web layer only: routes, cookies, JSON enveloping, status codes.
+The behaviour itself - the exclusive install/removal job, the Simple Mode
+ownership gate, the operations log, the environment summary - lives in
+slpm/core.py, so another interface (a desktop window, a CLI) can call the very
+same logic. What stays here is one kind of presentation of that logic.
+"""
 import io
 import logging
 import os
 import sys
-import threading
 from pathlib import Path
+from urllib.parse import quote
 
 from flask import Flask, jsonify, make_response, render_template, request, send_file
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from slpm import apps as apps_mod
-from slpm import (apt, autostart, desktop, flatpak_snap, download, helper,
+from slpm import (apt, autostart, core, desktop, flatpak_snap, download, helper,
                   installer, i18n, proc, shortcuts as shortcuts_mod, state)
 
 log = logging.getLogger("slpm")
@@ -46,9 +53,6 @@ THEME_COOKIE = "slpm_theme"
 MODE_COOKIE = "slpm_mode"
 THEMES = ("light", "dark")
 MODES = ("simple", "advanced")
-
-_install_lock = threading.Lock()
-_job = {"active": False, "label": ""}
 
 
 # ---------------------------------------------------------------- ui prefs
@@ -148,60 +152,56 @@ def _err(exc):
 
 
 def _busy_reply():
-    return jsonify({"ok": False, "busy": True, "label": _job["label"],
+    job = core.current_job()
+    return jsonify({"ok": False, "busy": True, "label": job["label"],
                     "message": proc.t("{label} is still running. Wait for it to finish.",
-                                      label=_job["label"])}), 409
+                                      label=job["label"])}), 409
+
+
+def _web_icon_url(rec):
+    """The /api/icon URL for one scan row: the web layer's rendering of icon+id.
+
+    The core modules return an icon *name* and an entry *id*; the URL shape is this
+    layer's business, and another interface (a desktop window, a CLI) resolves the
+    same name its own way.
+    """
+    if not rec.get("icon"):
+        return ""
+    return f"/api/icon?name={quote(rec['icon'])}&app={quote(rec['id'])}"
+
+
+def _with_icon_urls(rows):
+    """Attach icon_url to every row, in place, the way the pages expect it."""
+    for rec in rows:
+        rec["icon_url"] = _web_icon_url(rec)
+    return rows
 
 
 # --------------------------------------------------------------------- pages
 
 @app.route("/")
 def page_install():
-    return render_template("install.html", page="install", env=_env())
+    return render_template("install.html", page="install", env=core.env())
 
 
 @app.route("/apps")
 def page_apps():
-    return render_template("apps.html", page="apps", env=_env())
+    return render_template("apps.html", page="apps", env=core.env())
 
 
 @app.route("/shortcuts")
 def page_shortcuts():
-    return render_template("shortcuts.html", page="shortcuts", env=_env())
+    return render_template("shortcuts.html", page="shortcuts", env=core.env())
 
 
 @app.route("/startup")
 def page_startup():
-    return render_template("startup.html", page="startup", env=_env())
+    return render_template("startup.html", page="startup", env=core.env())
 
 
 @app.route("/updates")
 def page_updates():
-    return render_template("updates.html", page="updates", env=_env())
-
-
-def _env():
-    return {
-        "is_root": os.geteuid() == 0,
-        "has_pkexec": bool(proc.which("pkexec")),
-        "helper_up": not helper._stale(state.HELPER_SOCK),
-        "distro": _distro(),
-        "managers": {
-            "apt": bool(proc.which("apt-get")),
-            "flatpak": bool(proc.which("flatpak")),
-            "snap": bool(proc.which("snap")),
-        },
-    }
-
-
-def _distro():
-    try:
-        for line in Path("/etc/os-release").read_text().splitlines():
-            if line.startswith("PRETTY_NAME="):
-                return line.split("=", 1)[1].strip().strip('"')
-    except OSError:
-        pass
-    return "Linux"
+    return render_template("updates.html", page="updates", env=core.env())
 
 
 # ------------------------------------------------------------------ install
@@ -218,22 +218,16 @@ def api_detect():
 @app.post("/api/install")
 def api_install():
     data = request.json or {}
-    with _install_lock:
-        # The flag and the work that guards it must be decided under the same lock:
-        # two requests that both read the flag first would otherwise both start.
-        if _job["active"]:
+    path = data.get("path", "")
+    try:
+        result = core.run_exclusive(
+            proc.t("Installation"), lambda: installer.install(path, data.get("opts") or {}))
+        if result is None:
             return _busy_reply()
-        _job.update(active=True, label=proc.t("Installation"))
-        try:
-            result = installer.install(data.get("path", ""), data.get("opts") or {})
-            _log_action("install", data.get("path", ""), result.get("ok"), result.get("message"))
-            return jsonify(result)
-        except Exception as exc:
-            return _err(exc)
-        finally:
-            _job.update(active=False, label="")
-            apps_mod.bust_meta_cache()
-            desktop.bust_collect_cache()
+        core.log_action("install", path, result.get("ok"), result.get("message"))
+        return jsonify(result)
+    except Exception as exc:
+        return _err(exc)
 
 
 @app.post("/api/helper/start")
@@ -288,7 +282,8 @@ def api_apps():
     """
     try:
         mode = _ui_mode()
-        return jsonify({"ok": True, "mode": mode, "apps": apps_mod.apps(mode)})
+        return jsonify({"ok": True, "mode": mode,
+                        "apps": _with_icon_urls(apps_mod.apps(mode))})
     except Exception as exc:
         return _err(exc)
 
@@ -347,31 +342,32 @@ def api_uninstall():
     if not target:
         return jsonify({"ok": False,
                         "message": proc.t("Nothing was named to remove.")}), 400
-    if _ui_mode() != "advanced" and not _user_installed_app(data):
+    if _ui_mode() != "advanced" and not core.user_installed(
+            target=str(data.get("target") or ""), file_name=str(data.get("file") or "")):
         return _advanced_only()
-    with _install_lock:
-        if _job["active"]:
+
+    def work():
+        if manager == "apt":
+            ok, msg, detail = apt.uninstall(target)
+        elif manager == "flatpak":
+            ok, msg, detail = flatpak_snap.flatpak_uninstall(target)
+        elif manager == "snap":
+            ok, msg, detail = flatpak_snap.snap_uninstall(target)
+        elif manager in ("appimage", "desktop"):
+            ok, msg, detail = installer.uninstall_desktop_entry(data.get("file", ""))
+        else:
+            ok, msg, detail = False, proc.t("SLPM does not manage this item."), ""
+        return ok, msg, detail
+
+    try:
+        result = core.run_exclusive(proc.t("Removal"), work)
+        if result is None:
             return _busy_reply()
-        _job.update(active=True, label=proc.t("Removal"))
-        try:
-            if manager == "apt":
-                ok, msg, detail = apt.uninstall(target)
-            elif manager == "flatpak":
-                ok, msg, detail = flatpak_snap.flatpak_uninstall(target)
-            elif manager == "snap":
-                ok, msg, detail = flatpak_snap.snap_uninstall(target)
-            elif manager in ("appimage", "desktop"):
-                ok, msg, detail = installer.uninstall_desktop_entry(data.get("file", ""))
-            else:
-                ok, msg, detail = False, proc.t("SLPM does not manage this item."), ""
-            _log_action("uninstall", f"{manager}:{target}", ok, msg)
-            return jsonify({"ok": ok, "message": msg, "detail": detail})
-        except Exception as exc:
-            return _err(exc)
-        finally:
-            _job.update(active=False, label="")
-            apps_mod.bust_meta_cache()
-            desktop.bust_collect_cache()
+        ok, msg, detail = result
+        core.log_action("uninstall", f"{manager}:{target}", ok, msg)
+        return jsonify({"ok": ok, "message": msg, "detail": detail})
+    except Exception as exc:
+        return _err(exc)
 
 
 # -------------------------------------------------------------------- startup
@@ -386,7 +382,8 @@ def api_startup():
     """
     try:
         mode = _ui_mode()
-        return jsonify({"ok": True, "mode": mode, "apps": autostart.collect(mode)})
+        return jsonify({"ok": True, "mode": mode,
+                        "apps": _with_icon_urls(autostart.collect(mode))})
     except Exception as exc:
         return _err(exc)
 
@@ -415,7 +412,7 @@ def api_startup_candidates():
                 "id": rec["id"],
                 "name": rec["name"],
                 "icon": rec["icon"],
-                "icon_url": rec["icon_url"],
+                "icon_url": _web_icon_url(rec),
                 "comment": rec["comment"] or rec["generic"],
             })
         return jsonify({"ok": True, "apps": rows})
@@ -487,7 +484,8 @@ def api_shortcuts():
     """Application shortcuts in the current view (simple: menu visible, advanced: all)."""
     try:
         mode = _ui_mode()
-        return jsonify({"ok": True, "mode": mode, "shortcuts": shortcuts_mod.collect(mode)})
+        return jsonify({"ok": True, "mode": mode,
+                        "shortcuts": _with_icon_urls(shortcuts_mod.collect(mode))})
     except Exception as exc:
         return _err(exc)
 
@@ -553,24 +551,6 @@ def _advanced_only():
                     "message": proc.t("This is only available in Advanced Mode.")}), 403
 
 
-def _user_installed_app(data):
-    """Is the app this removal request names one the user installed themselves?
-
-    The request carries a removal target (a package name, a snap id, a desktop entry
-    id), and the app it belongs to has to be found in the Simple list. Ownership is
-    never taken from the request: an app that Simple Mode would not show is not
-    removable from Simple Mode, whatever the request claims about it.
-    """
-    target = str(data.get("target") or "")
-    file_name = str(data.get("file") or "")
-    for rec in apps_mod.apps("simple"):
-        if target and target in (rec.get("package"), rec.get("id")):
-            return True
-        if file_name and file_name == rec.get("file"):
-            return True
-    return False
-
-
 @app.get("/api/packages/<name>")
 def api_package(name):
     if _ui_mode() != "advanced":
@@ -607,43 +587,44 @@ def api_package_remove():
         return jsonify({"ok": False, "message": proc.t(
             "Confirmation text did not match the package name. Nothing was "
             "removed.")}), 400
-    with _install_lock:
-        if _job["active"]:
+
+    purge = bool(data.get("purge"))
+
+    def work():
+        ok, msg, detail = (apt.purge if purge else apt.uninstall)(name)
+        return ok, msg, detail
+
+    try:
+        result = core.run_exclusive(proc.t("Removing {name}", name=name), work)
+        if result is None:
             return _busy_reply()
-        _job.update(active=True, label=proc.t("Removing {name}", name=name))
-        try:
-            ok, msg, detail = (apt.purge if data.get("purge") else apt.uninstall)(name)
-            _log_action("remove", name, ok, msg)
-            return jsonify({"ok": ok, "message": msg, "detail": detail})
-        except Exception as exc:
-            return _err(exc)
-        finally:
-            _job.update(active=False, label="")
-            apps_mod.bust_meta_cache()
-            desktop.bust_collect_cache()
+        ok, msg, detail = result
+        core.log_action("remove", name, ok, msg)
+        return jsonify({"ok": ok, "message": msg, "detail": detail})
+    except Exception as exc:
+        return _err(exc)
 
 
 @app.post("/api/packages/autoremove")
 def api_autoremove():
     if _ui_mode() != "advanced":
         return _advanced_only()
-    with _install_lock:
-        if _job["active"]:
+
+    def work():
+        rc, out, err = apt.autoremove()
+        ok = rc == 0
+        msg = proc.t("Unused dependencies were cleaned up.") if ok \
+            else proc.t("Cleanup failed.")
+        return ok, msg, "" if ok else apt._apt_reason(out, err)
+
+    try:
+        result = core.run_exclusive(proc.t("Cleaning up"), work)
+        if result is None:
             return _busy_reply()
-        _job.update(active=True, label=proc.t("Cleaning up"))
-        try:
-            rc, out, err = apt.autoremove()
-            ok = rc == 0
-            msg = proc.t("Unused dependencies were cleaned up.") if ok \
-                else proc.t("Cleanup failed.")
-            return jsonify({"ok": ok, "message": msg,
-                            "detail": "" if ok else apt._apt_reason(out, err)})
-        except Exception as exc:
-            return _err(exc)
-        finally:
-            _job.update(active=False, label="")
-            apps_mod.bust_meta_cache()
-            desktop.bust_collect_cache()
+        ok, msg, detail = result
+        return jsonify({"ok": ok, "message": msg, "detail": detail})
+    except Exception as exc:
+        return _err(exc)
 
 
 # -------------------------------------------------------- install by name
@@ -683,28 +664,28 @@ def api_packages_install():
     if manager not in ("apt", "snap", "flatpak"):
         return jsonify({"ok": False,
                         "message": proc.t("SLPM does not manage this item.")}), 400
-    with _install_lock:
-        if _job["active"]:
+
+    def work():
+        if manager == "apt":
+            ok, msg, detail = apt.install_name(name)
+        elif manager == "snap":
+            ok, msg, detail = flatpak_snap.snap_install(name)
+        else:
+            ok, msg, detail = flatpak_snap.flatpak_install(name)
+        return ok, msg, detail
+
+    try:
+        result = core.run_exclusive(proc.t("Installing {name}", name=name), work)
+        if result is None:
             return _busy_reply()
-        _job.update(active=True, label=proc.t("Installing {name}", name=name))
-        try:
-            if manager == "apt":
-                ok, msg, detail = apt.install_name(name)
-            elif manager == "snap":
-                ok, msg, detail = flatpak_snap.snap_install(name)
-            else:
-                ok, msg, detail = flatpak_snap.flatpak_install(name)
-            _log_action("install", f"{manager}:{name}", ok, msg)
-            return jsonify({"ok": ok, "message": msg, "detail": detail})
-        except Exception as exc:
-            return _err(exc)
-        finally:
-            _job.update(active=False, label="")
-            apps_mod.bust_meta_cache()
-            desktop.bust_collect_cache()
+        ok, msg, detail = result
+        core.log_action("install", f"{manager}:{name}", ok, msg)
+        return jsonify({"ok": ok, "message": msg, "detail": detail})
+    except Exception as exc:
+        return _err(exc)
 
 
-# -------------------------------------------------------------- updates
+# ------------------------------------------------------------- updates
 
 @app.get("/api/updates")
 def api_updates():
@@ -722,7 +703,7 @@ def api_updates():
             "apt": apt.list_upgrades(),
             "flatpak": flatpak_snap.flatpak_updates(),
             "snap": flatpak_snap.snap_updates(),
-            "managers": _env()["managers"],
+            "managers": core.env()["managers"],
         })
     except Exception as exc:
         return _err(exc)
@@ -744,53 +725,52 @@ def api_updates_run():
     if manager not in ("apt", "snap", "flatpak"):
         return jsonify({"ok": False,
                         "message": proc.t("SLPM does not manage this item.")}), 400
-    with _install_lock:
-        if _job["active"]:
-            return _busy_reply()
-        # With a name the run targets one row of the list instead of the whole manager;
-        # the label follows so the status bar says which item is moving.
-        _job.update(active=True,
-                    label=proc.t("Updating {name}…", name=name) if name
-                    else proc.t("Updating…"))
-        try:
-            if name:
-                if manager == "apt":
-                    ok, msg, detail = apt.upgrade_one(name, version)
-                elif manager == "flatpak":
-                    ok, msg, detail = flatpak_snap.flatpak_update_one(name)
-                else:
-                    ok, msg, detail = flatpak_snap.snap_refresh_one(name)
-            elif manager == "apt" and step == "refresh":
-                rc, out, err = apt.refresh_lists()
-                ok = rc == 0
-                msg = (proc.t("Package lists were refreshed.") if ok
-                       else proc.t("Refreshing the package lists failed."))
-                detail = "" if ok else apt._apt_reason(out, err)
-            elif manager == "apt":
-                rc, out, err = apt.do_upgrade()
-                ok = rc == 0
-                msg = (proc.t("System packages were updated.") if ok
-                       else proc.t("Updating the system packages failed."))
-                detail = "" if ok else apt._apt_reason(out, err)
+
+    def work():
+        if name:
+            if manager == "apt":
+                ok, msg, detail = apt.upgrade_one(name, version)
             elif manager == "flatpak":
-                ok, msg, detail = flatpak_snap.flatpak_update()
+                ok, msg, detail = flatpak_snap.flatpak_update_one(name)
             else:
-                ok, msg, detail = flatpak_snap.snap_refresh()
-            _log_action("update", manager, ok, msg)
-            return jsonify({"ok": ok, "message": msg, "detail": detail})
-        except Exception as exc:
-            return _err(exc)
-        finally:
-            _job.update(active=False, label="")
-            apps_mod.bust_meta_cache()
-            desktop.bust_collect_cache()
+                ok, msg, detail = flatpak_snap.snap_refresh_one(name)
+        elif manager == "apt" and step == "refresh":
+            rc, out, err = apt.refresh_lists()
+            ok = rc == 0
+            msg = (proc.t("Package lists were refreshed.") if ok
+                   else proc.t("Refreshing the package lists failed."))
+            detail = "" if ok else apt._apt_reason(out, err)
+        elif manager == "apt":
+            rc, out, err = apt.do_upgrade()
+            ok = rc == 0
+            msg = (proc.t("System packages were updated.") if ok
+                   else proc.t("Updating the system packages failed."))
+            detail = "" if ok else apt._apt_reason(out, err)
+        elif manager == "flatpak":
+            ok, msg, detail = flatpak_snap.flatpak_update()
+        else:
+            ok, msg, detail = flatpak_snap.snap_refresh()
+        return ok, msg, detail
+
+    # With a name the run targets one row of the list instead of the whole manager;
+    # the label follows so the status bar says which item is moving.
+    label = proc.t("Updating {name}…", name=name) if name else proc.t("Updating…")
+    try:
+        result = core.run_exclusive(label, work)
+        if result is None:
+            return _busy_reply()
+        ok, msg, detail = result
+        core.log_action("update", manager, ok, msg)
+        return jsonify({"ok": ok, "message": msg, "detail": detail})
+    except Exception as exc:
+        return _err(exc)
 
 
 # ------------------------------------------------------------------- status
 
 @app.get("/api/status")
 def api_status():
-    return jsonify({"ok": True, "busy": _job, "env": _env()})
+    return jsonify({"ok": True, "busy": core.current_job(), "env": core.env()})
 
 
 @app.route("/api/pick", methods=["GET", "POST"])
@@ -807,37 +787,6 @@ def api_pick():
     return jsonify({"ok": False, "message": proc.t(
         "No file chooser is installed on this computer. Paste the file path "
         "instead.")})
-
-
-MAX_ACTIONS_LOG = 1024 * 1024  # keep the log from growing for the life of the machine
-
-
-def _log_action(kind, target, ok, message):
-    """One line per package operation, rotated at about one megabyte.
-
-    The old file is renamed, never truncated in place: a reader holding the file open
-    keeps reading the old contents while the new log starts fresh.
-    """
-    try:
-        state.CACHE.mkdir(parents=True, exist_ok=True)
-        try:
-            if state.ACTIONS_LOG.stat().st_size > MAX_ACTIONS_LOG:
-                state.ACTIONS_LOG.replace(state.ACTIONS_LOG.with_name("actions.log.old"))
-        except OSError:
-            pass
-        with open(state.ACTIONS_LOG, "a") as fh:
-            lines = (message or "").splitlines()
-            first_line = lines[0][:200] if lines else ""
-            fh.write(f"{_now()}\t{kind}\t{target}\t{'ok' if ok else 'failed'}\t"
-                     f"{first_line}\n")
-    except OSError:
-        pass
-
-
-def _now():
-    import datetime
-
-    return datetime.datetime.now().isoformat(timespec="seconds")
 
 
 @app.errorhandler(404)

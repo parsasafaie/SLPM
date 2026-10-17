@@ -37,7 +37,8 @@ A background download thread does not inherit the Flask request's `ContextVar`; 
 
 ## Main components
 
-- `app.py`: Flask entry point, routes, browser preferences, installation and removal job state, and error boundaries.
+- `app.py`: the web layer — Flask entry point, routes, browser preferences (cookies), JSON/HTTP details and error boundaries. It builds `/api/icon` URLs from the icon name and id each scan row carries; the URL shape is the web layer's business.
+- `slpm/core.py`: the service layer between the interfaces and the domain modules — the exclusive install/removal job (`run_exclusive`), the Simple Mode ownership gate, the operation log and the environment summary. It imports no HTTP and builds no URL, so a desktop window or a CLI can call the very same logic.
 - `slpm/installer.py`: detects `.deb`, AppImage, Flatpak references, archives and executable files, then chooses the appropriate installation or registration path.
 - `slpm/apt.py`: reads `dpkg` data and installs or removes Debian packages.
 - `slpm/flatpak_snap.py`: finds installed Flatpak and Snap applications and performs their package operations.
@@ -216,7 +217,7 @@ The server listens on `127.0.0.1` by default. Environment variables can change t
 
 ## State and concurrency
 
-Language, theme and view mode are browser cookies. The active install or removal state is held in a process-local variable and protected by `_install_lock`; a new request receives a busy response while an operation is running. Each download job has its own thread and lock, while `_jobs_lock` only coordinates access to the job list.
+Language, theme and view mode are browser cookies. The active install or removal state and its lock live in `slpm/core.py` (`run_exclusive`); a new request receives a busy response while an operation is running. Each download job has its own thread and lock, while `_jobs_lock` only coordinates access to the job list.
 
 This state lives in the memory of one process; there is no database or distributed lock. The architecture is suitable for one local Flask process, not a public multi-process or multi-user service.
 

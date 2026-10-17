@@ -8,7 +8,6 @@ import os
 import re
 import time
 from pathlib import Path
-from urllib.parse import quote
 
 from . import desktop, proc, util
 
@@ -82,11 +81,6 @@ def collect(mode="simple"):
             "exec": rec.get("exec", ""),
             "binary": rec.get("binary", ""),
             "icon": rec.get("icon", ""),
-            "icon_url": (
-                f"/api/icon?name={quote(rec['icon'])}&app={quote(entry_id)}"
-                if rec.get("icon")
-                else ""
-            ),
             "categories": rec.get("categories", []),
             "terminal": bool(rec.get("terminal")),
             "file": rec.get("file", ""),
