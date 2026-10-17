@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Name=SLPM Desktop
+Name[fa]=اس‌ال‌پی‌ام دسکتاپ
+GenericName=Package Manager
+GenericName[fa]=مدیر بسته
+Comment=The SLPM dashboard in a native window
+Comment[fa]=داشبورد اس‌ال‌پی‌ام در یک پنجرهٔ بومی
+Exec=AppRun
+Icon=slpm
+Terminal=false
+Categories=System;PackageManager;
+Keywords=package;install;software;apt;flatpak;snap;desktop;
+StartupNotify=true

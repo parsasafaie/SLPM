@@ -20,4 +20,16 @@
   <provides>
     <binary>slpm</binary>
   </provides>
+  <releases>
+    <release version="0.2.0" date="2026-10-17">
+      <description>
+        <p>The dashboard is now also available as a second AppImage that hosts
+        it in a native desktop window (SLPM-Desktop), falling back to the
+        browser where WebKitGTK is not installed.</p>
+        <p xml:lang="fa">داشبورد اکنون به‌صورت یک اپ‌ایمیج دوم هم عرضه می‌شود که
+        آن را در یک پنجرهٔ دسکتاپ بومی میزبانی می‌کند (SLPM-Desktop) و هرجا
+        WebKitGTK نصب نبود به مرورگر برمی‌گردد.</p>
+      </description>
+    </release>
+  </releases>
 </component>

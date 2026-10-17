@@ -1,0 +1,25 @@
+#!/bin/bash
+# AppRun for the SLPM Desktop AppImage: run the desktop window over the local
+# dashboard. The interpreter here is the HOST's python3, deliberately: the
+# WebKitGTK bindings (gi) that paint the window are compiled for the host
+# Python's ABI, so a bundled interpreter could not load them on distributions
+# that ship a different Python. Everything SLPM itself needs is pure Python
+# and travels inside this image (flask, waitress, pywebview under
+# usr/lib/python3). The two host components are python3 and WebKitGTK - both
+# standard on desktop installs. When either is missing, desktop_app.py falls
+# back to opening the dashboard in the default browser: the desktop window
+# degrades to the web one, it never breaks.
+set -u
+
+APPDIR="${APPDIR:-"$(dirname "$(readlink -f "$0")")"}"
+APP="$APPDIR/usr/lib/slpm/desktop_app.py"
+SITE="$APPDIR/usr/lib/python3"
+
+[ -f "$APP" ] || { echo "slpm-desktop: application files not found." >&2; exit 1; }
+[ -d "$SITE" ] || { echo "slpm-desktop: bundled Python packages not found." >&2; exit 1; }
+
+export PYTHONPATH="$SITE${PYTHONPATH:+:$PYTHONPATH}"
+# No LD_LIBRARY_PATH and no bundled interpreter: the WebKitGTK this window
+# paints with comes from the host distribution, like every other system
+# binary SLPM drives (apt, flatpak, snap, pkexec).
+exec /usr/bin/env python3 "$APP" "$@"

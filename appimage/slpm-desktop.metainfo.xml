@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.parsasafaie.SLPM.Desktop</id>
+  <metadata_license>MIT</metadata_license>
+  <project_license>MIT</project_license>
+  <name>SLPM Desktop</name>
+  <summary>Simple Linux Package Manager - native desktop window</summary>
+  <summary xml:lang="fa">مدیر بستهٔ سادهٔ لینوکس — پنجرهٔ دسکتاپ</summary>
+  <description>
+    <p>The SLPM dashboard hosted in a native application window instead of a
+    browser tab. The window loads the very web interface the SLPM AppImage
+    serves locally: the UI is not duplicated, so the desktop app and the web
+    dashboard cannot drift apart.</p>
+    <p>The window paints with the distribution's WebKitGTK through
+    python3-pywebview, both bundled beside a trusted host interpreter; where
+    WebKitGTK is not installed the same image opens the dashboard in the
+    default browser, so it never loses functionality.</p>
+    <p xml:lang="fa">داشبورد اس‌ال‌پی‌ام در یک پنجرهٔ بومی به‌جای زبانهٔ مرورگر.
+    پنجره همان رابط وبی را بار می‌کند که اپ‌ایمیج اس‌ال‌پی‌ام محلی سرو می‌کند؛ رابط
+    بازنویسی نشده، بنابراین دسکتاپ و وب از هم جدا نمی‌شوند.</p>
+    <p xml:lang="fa">پنجره با WebKitGTK خودِ توزیع رسم می‌شود و اگر WebKitGTK نصب
+    نبود، همان فایل داشبورد را در مرورگر پیش‌فرض باز می‌کند؛ پس هیچ‌گاه کارکردی
+    از دست نمی‌رود.</p>
+  </description>
+  <launchable type="desktop-id">slpm-desktop.desktop</launchable>
+  <url type="homepage">https://github.com/parsasafaie/SLPM</url>
+  <developer>
+    <name>Parsa Safaie</name>
+  </developer>
+</component>

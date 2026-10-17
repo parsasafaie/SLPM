@@ -1,11 +1,20 @@
-name: Release AppImage
+name: Release AppImages
 
-# Builds a self-contained AppImage from the release's tag and attaches it to
-# that release's assets. Python itself is bundled (python-build-standalone),
-# so SLPM does not depend on the interpreter or Python packages the target
-# distribution ships. Also runnable manually (workflow_dispatch) for test
-# builds; a manual run builds and smoke-tests the same file but uploads it as
-# a workflow artifact instead of touching a release.
+# Builds two self-contained AppImages from the release's tag and attaches both
+# to that release's assets:
+#
+#   SLPM_${version}-x86_64.AppImage           the web dashboard (browser UI)
+#   SLPM-Desktop_${version}-x86_64.AppImage   the dashboard in a native window
+#
+# Both bundle Python itself (python-build-standalone), so the web image does
+# not depend on the interpreter or Python packages the target distribution
+# ships. The desktop image paints with the host's WebKitGTK through
+# python3-pywebview (bundled here as a pure-Python package) and runs on the
+# host's python3: the WebKitGTK bindings are compiled per-ABI, so the glue
+# interpreter must be the host's; the fallback is the browser. Also runnable
+# manually (workflow_dispatch) for test builds; a manual run builds and
+# smoke-tests the same files but uploads them as workflow artifacts instead of
+# touching a release.
 on:
   release:
     types: [published]
@@ -36,21 +45,23 @@ jobs:
           if [ "$EVENT_NAME" = "release" ]; then
             tag="$RELEASE_TAG"
           else
-            tag="v0.1.0"
+            tag="v0.2.0"
           fi
           version="${tag#v}"
-          # The AppImage file name is SLPM_<version>-x86_64.AppImage, so the
-          # name must match the tag exactly: <version> is the tag with a
-          # single leading "v" stripped, nothing else. The regex constrains
-          # the version's shape and the check below pins it to the tag, so
-          # any tag whose stripped form is not a plain, matching version
-          # (release-1.0, vv1.2, …) is rejected rather than shipped.
+          # The AppImage file names are SLPM_<version>-x86_64.AppImage and
+          # SLPM-Desktop_<version>-x86_64.AppImage, so the name must match the
+          # tag exactly: <version> is the tag with a single leading "v"
+          # stripped, nothing else. The regex constrains the version's shape
+          # and the check below pins it to the tag, so any tag whose stripped
+          # form is not a plain, matching version (release-1.0, vv1.2, …) is
+          # rejected rather than shipped.
           if ! [[ "$version" =~ ^[0-9]+(\.[0-9]+)*([~+.-][0-9A-Za-z.]+)?$ ]] \
              || { [ "$tag" != "$version" ] && [ "$tag" != "v$version" ]; }; then
             echo "::error::Tag '$tag' is not a valid version (expected e.g. v1.2.3)."
             exit 1
           fi
-          echo "AppImage will be named SLPM_${version}-x86_64.AppImage"
+          echo "AppImages will be named SLPM_${version}-x86_64.AppImage" \
+               "and SLPM-Desktop_${version}-x86_64.AppImage"
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
@@ -77,7 +88,7 @@ jobs:
           fi
           echo "url=$url" >> "$GITHUB_OUTPUT"
 
-      - name: Assemble AppDir
+      - name: Assemble web dashboard AppDir
         env:
           VERSION: ${{ steps.version.outputs.version }}
           PSA_URL: ${{ steps.psa.outputs.url }}
@@ -116,7 +127,45 @@ jobs:
           chmod 644 "$AppDir/slpm.png"
           ln -sf slpm.png "$AppDir/.DirIcon"
 
-      - name: Build AppImage
+      - name: Assemble desktop AppDir
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          AppDir="$PWD/SLPM-Desktop.AppDir"
+
+          # No bundled interpreter for this image (see appimage/AppRun-desktop
+          # for why: gi must match the host Python's ABI). The pure-Python
+          # pieces the window runs on travel with the image instead.
+          mkdir -p "$AppDir/usr/lib/slpm" "$AppDir/usr/lib/python3"
+          python3 -m pip install --no-cache-dir --no-compile \
+            --target "$AppDir/usr/lib/python3" \
+            "flask>=3.1,<4.0" "waitress>=2.1,<4.0" "pywebview>=4.0"
+          # MarkupSafe ships optional C speedups compiled for the runner's
+          # Python; they would fail to load on hosts with a different Python.
+          # Its own import falls back to pure Python, so strip the compiled
+          # extension and force exactly that path everywhere.
+          find "$AppDir/usr/lib/python3" -name '_speedups*.so' -delete
+
+          cp app.py "$AppDir/usr/lib/slpm/"
+          cp -r slpm templates static "$AppDir/usr/lib/slpm/"
+          cp desktop_app.py "$AppDir/usr/lib/slpm/"
+          find "$AppDir/usr/lib/slpm" -type d -name __pycache__ -prune \
+            -exec rm -rf {} +
+
+          install -D -m 644 appimage/slpm-desktop.metainfo.xml \
+            "$AppDir/usr/share/metainfo/io.github.parsasafaie.SLPM.Desktop.metainfo.xml"
+          install -D -m 644 LICENSE \
+            "$AppDir/usr/share/doc/slpm-desktop/LICENSE"
+
+          install -m 644 appimage/slpm-desktop.desktop \
+            "$AppDir/slpm-desktop.desktop"
+          install -m 755 appimage/AppRun-desktop "$AppDir/AppRun"
+          rsvg-convert -w 256 -h 256 appimage/slpm.svg -o "$AppDir/slpm.png"
+          chmod 644 "$AppDir/slpm.png"
+          ln -sf slpm.png "$AppDir/.DirIcon"
+
+      - name: Build both AppImages
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
@@ -124,22 +173,26 @@ jobs:
           curl -fsSL -o appimagetool \
             "https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage"
           chmod +x appimagetool
-          # --appimage-extract-and-run: the runner has no FUSE.
+          # --appimage-extract-and-run: the runner has no FUSE. ARCH is
+          # explicit for the desktop image: with no bundled native binary to
+          # read, appimagetool cannot guess the architecture itself.
           ./appimagetool --appimage-extract-and-run SLPM.AppDir \
             "SLPM_${VERSION}-x86_64.AppImage"
+          ARCH=x86_64 ./appimagetool --appimage-extract-and-run \
+            SLPM-Desktop.AppDir "SLPM-Desktop_${VERSION}-x86_64.AppImage"
 
-      - name: Smoke test in clean containers
+      - name: Smoke test the web image in clean containers
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
           set -euo pipefail
-          # Three general-purpose floors the AppImage must work on as
+          # Four general-purpose floors the web image must work on as
           # downloaded, with no system Python involved. The oldest container
           # exercises the glibc the bundled interpreter actually needs; the
           # run must come from the extracted image, the auxiliary endpoints
           # must answer, and a TLS download through SLPM's own API proves the
           # CA bundle travelled with the interpreter.
-          for image in ubuntu:22.04 debian:12 ubuntu:24.04; do
+          for image in ubuntu:22.04 debian:12 ubuntu:24.04 ubuntu:26.04; do
             echo "===== $image"
             docker run --rm -i -e VERSION="$VERSION" -v "$PWD:/pkg" -w /pkg \
               "$image" /bin/bash <<'SCRIPT'
@@ -212,17 +265,89 @@ jobs:
           SCRIPT
           done
 
+      - name: Smoke test the desktop image in clean containers
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          # The desktop image's floors are the host python3 and WebKitGTK 4.1,
+          # resolved by APT below as the target machine would. No real window
+          # can run without a display, so the server side runs headless (the
+          # window itself was exercised on a real desktop) and the GTK
+          # binding chain is proven importable under the same interpreter and
+          # bundled PYTHONPATH the image runs with.
+          for image in ubuntu:24.04 ubuntu:26.04 debian:13; do
+            echo "===== $image"
+            docker run --rm -i -e VERSION="$VERSION" -v "$PWD:/pkg" -w /tmp \
+              "$image" /bin/bash <<'SCRIPT'
+              set -euxo pipefail
+              export DEBIAN_FRONTEND=noninteractive
+              apt-get update -qq
+              apt-get install -y -qq --no-install-recommends curl \
+                ca-certificates python3 python3-gi procps \
+                gir1.2-webkit2-4.1 libwebkit2gtk-4.1-0
+
+              appimage="/pkg/SLPM-Desktop_${VERSION}-x86_64.AppImage"
+              test -f "$appimage"
+              # Extract once for this test: --appimage-extract-and-run would
+              # extract into the CWD. First exercise the runtime's exec path
+              # without a GUI claim, then drive the extracted AppRun, which
+              # is the same script a FUSE mount would run.
+              "$appimage" --appimage-extract-and-run --help \
+                </dev/null 2>/dev/null | grep -q 'SLPM'
+              root=$(ls -d /tmp/squashfs-root)
+              test -x "$root/usr/lib/slpm/desktop_app.py"
+              test -d "$root/usr/lib/python3/pywebview"
+
+              # The bundled pure-Python deps import under the HOST python,
+              # and the WebKitGTK binding chain is complete on this floor.
+              python3 -c "import sys; sys.path.insert(0, '$root/usr/lib/python3'); \
+                import flask, waitress, webview, gi; \
+                gi.require_version('WebKit2', '4.1'); \
+                from gi.repository import WebKit2; print('package chain ok')"
+
+              "$root/AppRun" --serve-only </dev/null &
+              launcher=$!
+              ok=""
+              for _ in $(seq 1 30); do
+                sleep 0.5
+                if curl -sf http://127.0.0.1:8686/api/status | grep -q '"ok"'; then
+                  ok=1; break
+                fi
+              done
+              test -n "$ok"
+
+              # The server glue runs under the host interpreter, not a
+              # bundled one, and pages render from the installed files.
+              cmdline=$(tr '\0' ' ' < "/proc/$(pgrep -f 'python.*desktop_app\.py' | head -1)/cmdline")
+              echo "$cmdline" | grep -q "python.*desktop_app\.py"
+              echo "$cmdline" | grep -qv "squashfs-root/usr/bin/python"
+              curl -sf http://127.0.0.1:8686/ | grep -q '<!doctype html>'
+
+              kill "$(pgrep -f 'python.*desktop_app\.py' | head -1)"
+              for _ in $(seq 1 20); do
+                kill -0 "$launcher" 2>/dev/null || break
+                sleep 0.5
+              done
+              ! kill -0 "$launcher" 2>/dev/null
+          SCRIPT
+          done
+
       - name: Upload to release assets
         if: github.event_name == 'release'
         env:
           GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
           gh release upload "${{ steps.version.outputs.tag }}" \
-            "SLPM_${{ steps.version.outputs.version }}-x86_64.AppImage" --clobber
+            "SLPM_${VERSION}-x86_64.AppImage" \
+            "SLPM-Desktop_${VERSION}-x86_64.AppImage" --clobber
 
-      - name: Upload build artifact (manual runs)
+      - name: Upload build artifacts (manual runs)
         if: github.event_name != 'release'
         uses: actions/upload-artifact@v4
         with:
-          name: "SLPM_${{ steps.version.outputs.version }}-x86_64"
-          path: "SLPM_${{ steps.version.outputs.version }}-x86_64.AppImage"
+          name: "SLPM_AppImages_${{ steps.version.outputs.version }}"
+          path: |
+            SLPM_${{ steps.version.outputs.version }}-x86_64.AppImage
+            SLPM-Desktop_${{ steps.version.outputs.version }}-x86_64.AppImage
