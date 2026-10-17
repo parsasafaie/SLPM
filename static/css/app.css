@@ -40,6 +40,7 @@
   --focus-ring: rgba(37, 99, 235, .15);
   --overlay: rgba(15, 23, 42, .45);
   --danger-strong: #b91c1c;
+  color-scheme: light;
 }
 
 /* The dark palette. Not an inversion of the light one: surfaces stay a little above
@@ -219,11 +220,28 @@ input[type=text], input[type=search], .select {
 }
 input:focus, .select:focus {
   outline: none; border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--focus-ring); background: var(--field-focus);
+  box-shadow: 0 0 0 3px var(--focus-ring); background-color: var(--field-focus);
 }
 .drop { display: flex; gap: .6rem; align-items: stretch; }
 .drop.dragover input { border-color: var(--accent); background: var(--drop-active); border-style: dashed; }
-.select { width: auto; min-width: 165px; cursor: pointer; }
+/* Native <select> controls ignore the CSS palette on some engines - WebKitGTK
+   (the desktop window) paints the control plain white no matter what --field
+   says. Draw the control ourselves instead: appearance:none plus a chevron
+   image we position per direction, so the select matches the text inputs
+   everywhere, and color-scheme (set on :root) keeps the opened dropdown list
+   dark in the dark theme. */
+.select {
+  appearance: none; -webkit-appearance: none; -moz-appearance: none;
+  width: auto; min-width: 165px; cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5 6 6.5 11 1.5' fill='none' stroke='%237d8595' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right .85rem center;   /* LTR: chevron at the far end */
+  padding-right: 2.2rem;
+}
+:root[dir="rtl"] .select {
+  background-position: left .85rem center;    /* RTL: chevron at the far end */
+  padding-left: 2.2rem; padding-right: .85rem;
+}
 
 .btn {
   font: inherit; font-weight: 600; padding: .62rem 1.15rem; border-radius: 10px;
