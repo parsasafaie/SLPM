@@ -11,7 +11,9 @@
   --ok: #15803d;
   --radius: 14px;
   --shadow: 0 1px 2px rgba(16, 24, 40, .06), 0 8px 24px -12px rgba(16, 24, 40, .18);
-  --font: "Segoe UI Variable", "Segoe UI", Inter, system-ui, -apple-system, "Noto Sans", Ubuntu, Cantarell, sans-serif;
+  /* Vazirmatn is the Persian face: Persian glyphs are missing from every font
+     before it, so Persian text lands here while Latin keeps the earlier faces. */
+  --font: "Segoe UI Variable", "Segoe UI", Inter, system-ui, -apple-system, "Vazirmatn", "Noto Sans", Ubuntu, Cantarell, sans-serif;
   --mono: "Cascadia Code", "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
 
   /* Fills that were previously hard-coded hex values. They are variables so the dark
@@ -174,6 +176,29 @@ code { font-family: var(--mono); background: var(--inset); padding: .1rem .35rem
   font-size: .78rem; font-weight: 600; padding: .35rem .7rem; border-radius: 999px;
   background: var(--info-bg); color: var(--info-text); white-space: nowrap;
 }
+/* The version pill is a button; a <button class="pill"> keeps the UA chrome
+   (border, font, default colour) unless it is dropped explicitly. */
+.pill-btn { border: 0; font: inherit; font-size: .78rem; cursor: pointer; }
+.pill-btn:hover { filter: brightness(.96); }
+html[data-theme="dark"] .pill-btn:hover { filter: brightness(1.12); }
+/* Self-update dialog: two terminal commands, always left-to-right even in the
+   Persian UI, with a copy button per section and a variant picker when the
+   running form of SLPM is not one of the published AppImages. */
+.update-sec { border: 1px solid var(--border); border-radius: 8px; padding: .55rem .65rem; margin-top: .7rem; }
+.update-sec-head { display: flex; align-items: center; gap: .5rem; }
+.update-sec-head strong { font-size: .82rem; }
+.update-sec .copy-btn { margin-inline-start: auto; padding: .05rem .55rem; font-size: .76rem; }
+.update-cmd { background: var(--inset); border-radius: 6px; padding: .55rem .6rem; margin: .45rem 0 0; overflow-x: auto; }
+.update-cmd code {
+  background: none; padding: 0; font-size: .8rem; display: block; white-space: pre;
+  direction: ltr; text-align: left; unicode-bidi: isolate;
+}
+.variant-row { display: flex; gap: .4rem; margin-top: .45rem; }
+.variant-btn {
+  border: 1px solid var(--border); background: transparent; color: inherit;
+  border-radius: 999px; padding: .16rem .7rem; font-size: .8rem; cursor: pointer;
+}
+.variant-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
 .pill.warn { background: var(--warn-bg); color: var(--warn); }
 
 /* ------------------------------------------------------- language / theme

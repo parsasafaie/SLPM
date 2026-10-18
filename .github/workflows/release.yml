@@ -1,10 +1,13 @@
 name: Release AppImages
 
-# Builds two self-contained AppImages from the release's tag and attaches both
-# to that release's assets:
+# Builds two self-contained AppImages from the release's tag and attaches all
+# three to that release's assets:
 #
 #   SLPM_${version}-x86_64.AppImage           the web dashboard (browser UI)
 #   SLPM-Desktop_${version}-x86_64.AppImage   the dashboard in a native window
+#   SHA256SUMS.txt                            checksums of both images, so the
+#                                             in-app update check can have the
+#                                             download verified
 #
 # Both bundle Python itself (python-build-standalone), so the web image does
 # not depend on the interpreter or Python packages the target distribution
@@ -45,7 +48,7 @@ jobs:
           if [ "$EVENT_NAME" = "release" ]; then
             tag="$RELEASE_TAG"
           else
-            tag="v0.2.0"
+            tag="v0.3.0"
           fi
           version="${tag#v}"
           # The AppImage file names are SLPM_<version>-x86_64.AppImage and
@@ -343,6 +346,14 @@ jobs:
           SCRIPT
           done
 
+      - name: Generate SHA256SUMS
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          sha256sum "SLPM_${VERSION}-x86_64.AppImage" \
+                    "SLPM-Desktop_${VERSION}-x86_64.AppImage" > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
       - name: Upload to release assets
         if: github.event_name == 'release'
         env:
@@ -351,7 +362,8 @@ jobs:
         run: |
           gh release upload "${{ steps.version.outputs.tag }}" \
             "SLPM_${VERSION}-x86_64.AppImage" \
-            "SLPM-Desktop_${VERSION}-x86_64.AppImage" --clobber
+            "SLPM-Desktop_${VERSION}-x86_64.AppImage" \
+            SHA256SUMS.txt --clobber
 
       - name: Upload build artifacts (manual runs)
         if: github.event_name != 'release'
@@ -361,3 +373,4 @@ jobs:
           path: |
             SLPM_${{ steps.version.outputs.version }}-x86_64.AppImage
             SLPM-Desktop_${{ steps.version.outputs.version }}-x86_64.AppImage
+            SHA256SUMS.txt

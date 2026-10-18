@@ -17,6 +17,7 @@ A simple local web app for installing, viewing, launching, and removing Linux so
 - A Startup Apps tab for viewing, adding, and turning off user-owned or packaged startup entries
 - A Shortcuts tab for managing the application menu: launch an entry, inspect its details, delete your own shortcuts, and hide pre-installed ones from your menu without touching system files. You can also create a shortcut for any program — pick its file with the file chooser, then set the name, icon, category, or run-in-terminal flag
 - An Updates tab (both modes) that lists what apt, Flatpak, and Snap each have available: expand a manager's list, update one item or the whole manager at once, and refresh the apt package lists. A snap that is still running is marked, and SLPM asks you to close it before updating it; a failed run shows the full error, not just a single line
+- A version check in the top bar: the `SLPM x.y.z` pill asks the release server whether a newer release exists and, if so, hands you two ready terminal commands — one to download the AppImage that matches what you are actually running (dashboard or desktop window) together with the release's published `SHA256SUMS.txt` and verify it, and one to run the downloaded file. SLPM never downloads or replaces itself behind your back
 - Install by name (Advanced Mode only): search the apt repositories as you type, or install an apt package, a snap, or a Flatpak app by its exact name
 - Support for `.deb`, `.snap`, AppImage, `.flatpakref`, several archive formats, and `.run`/`.sh` files that can be registered without being executed — opening a local file or downloading one from a link
 - Downloads run as background jobs with pause, continue and stop controls, a live progress bar, and automatic installation after completion unless another local file is already selected
@@ -36,15 +37,16 @@ A simple local web app for installing, viewing, launching, and removing Linux so
 Each release ships two self-contained AppImages — pick one (or both, many people run the desktop one daily and the dashboard one for a browser session):
 
 1. Download from [Releases](https://github.com/parsasafaie/SLPM/releases/latest):
-   - `SLPM_0.2.0-x86_64.AppImage` — the dashboard, opened in your browser
-   - `SLPM-Desktop_0.2.0-x86_64.AppImage` — the dashboard in a native window
+   - `SLPM_0.3.0-x86_64.AppImage` — the dashboard, opened in your browser
+   - `SLPM-Desktop_0.3.0-x86_64.AppImage` — the dashboard in a native window
+   - `SHA256SUMS.txt` — the checksums of both images (the in-app version check's download command verifies them)
 2. Make it executable — in the file manager's *Properties → Permissions* check *Allow executing*, or in a terminal:
    ```bash
-   chmod +x SLPM-Desktop_0.2.0-x86_64.AppImage
+   chmod +x SLPM-Desktop_0.3.0-x86_64.AppImage
    ```
 3. Run it — double-click in the file manager, or:
    ```bash
-   ./SLPM-Desktop_0.2.0-x86_64.AppImage
+   ./SLPM-Desktop_0.3.0-x86_64.AppImage
    ```
 
 That's the whole installation: no root, no dependencies, nothing written system-wide. If you use [AppImageLauncher](https://github.com/TheAssassin/AppImageLauncher) or a desktop that offers it, the first run can also add SLPM to your applications menu; otherwise nothing is installed into the menu.
@@ -63,7 +65,7 @@ Operations that need administrator access (package installation and removal, sys
 
 ### Updating
 
-Download the newer release's AppImage(s) and run instead of the old file(s). The local server keeps running the version it was started with, so stop SLPM first as shown above (a reboot has the same effect). Your settings and history (under `~/.cache/slpm`) are preserved. Delete the old AppImage files whenever you like — they are self-contained.
+Click the `SLPM x.y.z` pill in the top bar: it compares the running copy with the newest release and, when there is a newer one, gives you the download and run commands for the AppImage you are actually running. Download the newer release's AppImage(s) and run instead of the old file(s). The local server keeps running the version it was started with, so stop SLPM first as shown above (a reboot has the same effect). Your settings and history (under `~/.cache/slpm`) are preserved. Delete the old AppImage files whenever you like — they are self-contained.
 
 ### Uninstalling
 

@@ -37,7 +37,8 @@ sys.path.insert(0, str(ROOT))
 SKIP_MACHINE = "--skip-machine" in sys.argv
 
 from slpm import (apps, apt, appimage, autostart, desktop, download, flatpak_snap,  # noqa: E402
-                  helper, i18n, installer, ownership as ow, proc, shortcuts as shortcuts_mod)
+                  helper, i18n, installer, ownership as ow, proc, selfupdate,
+                  shortcuts as shortcuts_mod)
 
 # Runs inside node: collect every T()/TT()/tt() literal across all the page scripts,
 # check that each one is in the browser catalog, and that its {placeholder}s are
@@ -946,6 +947,88 @@ if os.path.islink("/proc/self/exe"):
           proc.pids_with_exe_prefix("/no/such/dir/"), [])
 else:
     print("skip  /proc scan (no /proc/self/exe here)")
+
+
+# --------------------------------------------------------- self-update check
+
+section("Self-update: variant detection, version compare and command building")
+
+_saved_appimage = os.environ.pop("APPIMAGE", None)
+try:
+    check("no APPIMAGE means the variant is unknown",
+          selfupdate.running_variant(), "unknown")
+    os.environ["APPIMAGE"] = "/home/u/Downloads/SLPM_0.3.0-x86_64.AppImage"
+    check("a web image is detected", selfupdate.running_variant(), "web")
+    os.environ["APPIMAGE"] = "/home/u/Downloads/SLPM-Desktop_0.3.0-x86_64.AppImage"
+    check("a desktop image is detected", selfupdate.running_variant(), "desktop")
+    os.environ["APPIMAGE"] = "/home/u/Apps/renamed.AppImage"
+    check("a renamed file is not claimed as a variant",
+          selfupdate.running_variant(), "unknown")
+finally:
+    if _saved_appimage is not None:
+        os.environ["APPIMAGE"] = _saved_appimage
+
+check("the reported version is the package version",
+      selfupdate.current_version(), __import__("slpm").__version__)
+check("the v prefix is ignored when comparing",
+      selfupdate.compare_status("0.3.0", "v0.3.0"), "up_to_date")
+check("an older copy means an update is available",
+      selfupdate.compare_status("0.2.0", "v0.3.0"), "update_available")
+check("a newer copy is still up to date",
+      selfupdate.compare_status("0.3.0", "v0.2.0"), "up_to_date")
+check("an unparseable tag is never ordered",
+      selfupdate.compare_status("0.3.0", "release-2"), "unknown")
+check("an unparseable current version is never ordered",
+      selfupdate.compare_status("source", "v9.9.9"), "unknown")
+
+_RELEASE = {
+    "tag_name": "v0.4.0",
+    "html_url": "https://github.com/parsasafaie/SLPM/releases/tag/v0.4.0",
+    "assets": [
+        {"name": "SLPM_0.4.0-x86_64.AppImage",
+         "browser_download_url": "https://example.invalid/SLPM_0.4.0-x86_64.AppImage"},
+        {"name": "SLPM-Desktop_0.4.0-x86_64.AppImage",
+         "browser_download_url": "https://example.invalid/SLPM-Desktop_0.4.0-x86_64.AppImage"},
+        {"name": "SHA256SUMS.txt",
+         "browser_download_url": "https://example.invalid/SHA256SUMS.txt"},
+    ],
+}
+plan = selfupdate._plan(_RELEASE, "desktop")
+check("the plan reports the newer release", plan["status"], "update_available")
+check("the running variant is echoed", plan["variant"], "desktop")
+_dl = plan["plan"]["desktop"]["download_cmd"]
+check("only the desktop image is named in the desktop commands",
+      "SLPM_0.4.0-x86_64.AppImage" in _dl, False)
+check("the desktop URL is in the download command",
+      "https://example.invalid/SLPM-Desktop_0.4.0-x86_64.AppImage" in _dl, True)
+check("the download command checks the published sums",
+      "sha256sum --ignore-missing -c SHA256SUMS.txt" in _dl, True)
+check("the run command is the same file, made executable",
+      plan["plan"]["desktop"]["run_cmd"],
+      "chmod +x SLPM-Desktop_0.4.0-x86_64.AppImage\n./SLPM-Desktop_0.4.0-x86_64.AppImage")
+check("the web variant gets its own commands", "web" in plan["plan"], True)
+check("an unknown variant still carries both pairs",
+      sorted(selfupdate._plan(_RELEASE, "unknown")["plan"]), ["desktop", "web"])
+
+_SUMSLESS = {key: value for key, value in _RELEASE.items() if key != "assets"}
+_SUMSLESS["assets"] = _RELEASE["assets"][:2]
+_dl2 = selfupdate._plan(_SUMSLESS, "web")["plan"]["web"]["download_cmd"]
+check("without a sums asset no checksum line is built",
+      "sha256sum" in _dl2, False)
+_ONLY_DESKTOP = {key: value for key, value in _RELEASE.items() if key != "assets"}
+_ONLY_DESKTOP["assets"] = _RELEASE["assets"][1:2]
+check("only variants that exist in the assets are planned",
+      sorted(selfupdate._plan(_ONLY_DESKTOP, "desktop")["plan"]), ["desktop"])
+
+empty_assets = selfupdate._plan({"tag_name": "v0.5.0", "assets": []}, "web")
+check("a release without our assets yields an empty plan", empty_assets["plan"], {})
+no_tag = None
+try:
+    selfupdate._plan({"assets": _RELEASE["assets"]}, "web")
+except selfupdate.CheckFailure as exc:
+    no_tag = True
+check("a release without a tag is refused", no_tag, True)
+
 
 
 # ------------------------------------------------------- helpers present

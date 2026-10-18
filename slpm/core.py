@@ -16,7 +16,7 @@ import threading
 from pathlib import Path
 
 from . import apps as apps_mod
-from . import desktop, helper, proc, state
+from . import desktop, helper, proc, selfupdate, state
 
 _t = proc.t
 
@@ -139,6 +139,7 @@ def env():
         "is_root": os.geteuid() == 0,
         "has_pkexec": bool(proc.which("pkexec")),
         "helper_up": not helper._stale(state.HELPER_SOCK),
+        "version": selfupdate.current_version(),
         "distro": _distro(),
         "managers": {
             "apt": bool(proc.which("apt-get")),

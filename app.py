@@ -20,7 +20,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from slpm import apps as apps_mod
 from slpm import (apt, autostart, core, desktop, flatpak_snap, download, helper,
-                  installer, i18n, proc, shortcuts as shortcuts_mod, state)
+                  installer, i18n, proc, selfupdate, shortcuts as shortcuts_mod, state)
 
 log = logging.getLogger("slpm")
 
@@ -762,6 +762,26 @@ def api_updates_run():
         ok, msg, detail = result
         core.log_action("update", manager, ok, msg)
         return jsonify({"ok": ok, "message": msg, "detail": detail})
+    except Exception as exc:
+        return _err(exc)
+
+
+# --------------------------------------------------------------- self-update
+
+@app.get("/api/selfupdate")
+def api_selfupdate():
+    """Is there a newer SLPM release, and how would the user get it?
+
+    Read-only and both modes: the check never reads the system beyond
+    $APPIMAGE and never changes anything - its answer is two terminal
+    commands derived from the release's own asset list. The failure of the
+    release server is not an app error, so it arrives as its own message
+    instead of the generic 500.
+    """
+    try:
+        return jsonify(selfupdate.check())
+    except selfupdate.CheckFailure as exc:
+        return jsonify({"ok": False, "message": str(exc)}), 502
     except Exception as exc:
         return _err(exc)
 

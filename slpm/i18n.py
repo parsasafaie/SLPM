@@ -482,6 +482,18 @@ _FA = {
     "This manager is not installed on this system.":
         "این مدیر بسته روی این رایانه نصب نیست.",
 
+    # ------------------------------------------------------------ self-update
+    "SLPM {version}": "SLPM {version}",
+    "Check for a new version of SLPM": "بررسی نسخهٔ جدید SLPM",
+    "The release server answered, but no release was there.":
+        "سرور انتشار پاسخ داد، اما هیچ انتشار موجودی در آن نبود.",
+    "The release server set a limit on this request. Try again later.":
+        "سرور انتشار برای این درخواست سقف گذاشته است. بعداً دوباره تلاش کنید.",
+    "The update check failed with HTTP {code}.":
+        "بررسی به‌روزرسانی با کد HTTP {code} ناموفق بود.",
+    "The release server could not be reached. Check the connection and try again.":
+        "سرور انتشار در دسترس نبود. اتصال را بررسی کنید و دوباره تلاش کنید.",
+
     # -------------------------------------------------------- install by name
     "Install a package": "نصب یک بسته",
     "Install by name from a package manager. This works in Advanced Mode only.":

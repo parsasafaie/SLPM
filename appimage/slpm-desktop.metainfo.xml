@@ -27,4 +27,18 @@
   <developer>
     <name>Parsa Safaie</name>
   </developer>
+  <releases>
+    <release version="0.3.0" date="2026-10-18">
+      <description>
+        <p>The dashboard now has a version check in its top bar. It compares
+        the running copy with the newest published release and hands over two
+        terminal commands - one to download and checksum-verify the matching
+        AppImage, one to run it - for the variant that is actually running.</p>
+        <p xml:lang="fa">داشبورد اکنون در نوار بالای خود یک بررسی نسخه دارد.
+        نسخهٔ در حال اجرا با جدیدترین انتشار مقایسه می‌شود و دو دستور ترمینال
+        تحویل داده می‌شود؛ یکی برای دانلود و بررسی درستی اپ‌ایمیج مربوطه و یکی
+        برای اجرای آن.</p>
+      </description>
+    </release>
+  </releases>
 </component>

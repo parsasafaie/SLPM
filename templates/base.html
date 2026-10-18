@@ -50,6 +50,10 @@
     {% endif %}
   </nav>
   <div class="env">
+    <button type="button" class="pill pill-btn" id="version-pill"
+            title="{{ t('Check for a new version of SLPM') }}">
+      {{ t('SLPM {version}', version=env.version) }}
+    </button>
     <span class="pill {{ 'warn' if not env.helper_up and not env.is_root }}" id="helper-pill">
       {% if env.is_root %}{{ t('Running as root') }}
       {% elif env.helper_up %}{{ t('Admin access ready') }}

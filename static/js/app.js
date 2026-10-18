@@ -115,6 +115,117 @@ document.addEventListener('keydown', e => {
 $('#theme-toggle') && ($('#theme-toggle').onclick = () => SLPM.toggleTheme());
 $('#lang-toggle') && ($('#lang-toggle').onclick = () => SLPM.toggleLang());
 
+/* ------------------------------------------------------------------ self-update
+ *
+ * The version pill in the top bar is only a check: the server reads its own
+ * version, asks the release server for the newest one and returns two terminal
+ * commands for the variant that is actually running (from $APPIMAGE). Nothing
+ * here changes the system; the copy buttons exist because the commands are
+ * meant to be pasted into a terminal, not because SLPM would run them itself. */
+
+async function copyText(text) {
+  try { await navigator.clipboard.writeText(text); return true; }
+  catch (e) { /* clipboard API denied or absent - fall back below */ }
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed';
+  ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.select();
+  let ok = false;
+  try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+  ta.remove();
+  return ok;
+}
+
+if ($('#version-pill')) ($('#version-pill').onclick = async () => {
+  modal({
+    title: T('Check for a new version of SLPM'),
+    html: `<p class="muted">${esc(T('Checking…'))}</p>`,
+    buttons: [{ label: T('Close'), kind: 'ghost' }],
+  });
+  const data = await api('/api/selfupdate');
+  if (!data || !data.ok) {
+    modal({
+      title: T('Check for a new version of SLPM'),
+      html: `<p>${esc((data && data.message) || T('The check could not be answered.'))}</p>`,
+      buttons: [{ label: T('Close'), kind: 'ghost' }],
+    });
+    return;
+  }
+  /* When the running variant is known it is preselected; from a source checkout
+     both command pairs are kept and the picker below decides. */
+  const plans = data.plan || {};
+  let variant = (data.variant && plans[data.variant])
+    ? data.variant : Object.keys(plans)[0];
+
+  const statusHtml = () => {
+    if (data.status === 'update_available') {
+      const txt = T('This copy runs version {current}; version {latest} is out.',
+                    { current: data.current, latest: data.latest.version });
+      return `<p>${esc(txt)}</p>`;
+    }
+    if (data.status === 'up_to_date')
+      return `<p>${esc(T('This copy is already the newest version.'))}</p>`;
+    return `<p>${esc(T('This copy could not be compared to the newest release '
+        + 'automatically. You decide from the file list below.'))}</p>`;
+  };
+
+  const render = (box) => {
+    const root = $('.update-plans', box);
+    if (!root) return;
+    const plan = plans[variant];
+    let html = statusHtml();
+    if (!plan) {
+      html += `<p class="muted small">${esc(T('No download was listed on the release page.'))}</p>`;
+      root.innerHTML = html;
+      return;
+    }
+    if (data.variant === 'unknown' && Object.keys(plans).length > 1) {
+      html += `<p class="small muted">${esc(T('Which one is your SLPM?'))}</p>
+        <div class="variant-row" role="group" aria-label="${esc(T('Which one is your SLPM?'))}"></div>`;
+      root.innerHTML = html;
+      const row = $('.variant-row', root);
+      const names = { web: T('Web dashboard'), desktop: T('Desktop window') };
+      Object.keys(plans).forEach(v => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = `variant-btn ${v === variant ? 'active' : ''}`;
+        b.textContent = names[v] || v;
+        b.onclick = () => { variant = v; render(box); };
+        row.appendChild(b);
+      });
+    } else {
+      root.innerHTML = html;
+    }
+    ['download_cmd', 'run_cmd'].forEach(field => {
+      if (!plan[field]) return;
+      const sec = document.createElement('div');
+      sec.className = 'update-sec';
+      const label = field === 'download_cmd'
+        ? T('Download command (checks the published SHA256 sums)')
+        : T('Run command');
+      sec.innerHTML = `<div class="update-sec-head"><strong>${esc(label)}</strong>`
+        + `<button type="button" class="btn btn-ghost copy-btn">${esc(T('Copy'))}</button></div>`
+        + `<pre class="update-cmd"><code>${esc(plan[field])}</code></pre>`;
+      $('.copy-btn', sec).onclick = async () => {
+        const ok = await copyText(plan[field]);
+        toast(ok ? T('Copied to clipboard.') : T('Copying to the clipboard did not work.'));
+      };
+      root.appendChild(sec);
+    });
+  };
+
+  modal({
+    title: T('Check for a new version of SLPM'),
+    html: `<div class="update-plans"><p class="muted">${esc(T('Checking…'))}</p></div>`,
+    buttons: [
+      { label: T('Close'), kind: 'ghost', onClick: closeModal },
+    ],
+    onOpen: render,
+  });
+});
+
 /* The Simple/Advanced switch in the tab row. It is rendered by the template (see
    base.html), so a page that has no switch simply has no buttons to wire. */
 $$('.mode-btn').forEach(btn => {

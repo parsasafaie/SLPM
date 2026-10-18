@@ -365,6 +365,29 @@ const SLPM = (() => {
     'This program has no command to run.':
       'این برنامه دستوری برای اجرا ندارد.',
 
+    /* ------------------------------------------------------------ app.js · self-update */
+    'Check for a new version of SLPM': 'بررسی نسخهٔ جدید SLPM',
+    'Checking…': 'در حال بررسی…',
+    'The check could not be answered.': 'بررسی نسخه پاسخی در بر نداشت.',
+    'This copy is already the newest version.': 'همین حالا جدیدترین نسخه در حال اجراست.',
+    'This copy runs version {current}; version {latest} is out.':
+      'این نسخه از SLPM نسخهٔ {current} در حال اجراست؛ نسخهٔ {latest} منتشر شده است.',
+    ['This copy could not be compared to the newest release automatically. '
+      + 'You decide from the file list below.']:
+      'مقایسهٔ خودکار این نسخه با جدیدترین انتشار ممکن نشد. انتخاب با شما و بر اساس '
+      + 'فهرست زیر است.',
+    'No download was listed on the release page.':
+      'در صفحهٔ انتشار، فایلی برای دانلود ذکر نشده بود.',
+    'Which one is your SLPM?': 'کدام‌یک SLPM شماست؟',
+    'Web dashboard': 'داشبورد وب',
+    'Desktop window': 'پنجرهٔ دسکتاپ',
+    'Download command (checks the published SHA256 sums)':
+      'دستور دانلود (درستی فایل با خلاصهٔ SHA256 بررسی می‌شود)',
+    'Run command': 'دستور اجرا',
+    'Copy': 'کپی',
+    'Copied to clipboard.': 'در کلیپ‌بورد کپی شد.',
+    'Copying to the clipboard did not work.': 'کپی در کلیپ‌بورد انجام نشد.',
+
     /* The theme button's own label. The language button is labelled in the template,
        because the server knows the current language while it renders the page. */
     'Switch to dark theme': 'تغییر به تم تاریک',

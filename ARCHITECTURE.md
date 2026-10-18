@@ -193,6 +193,16 @@ Updates are a both-modes feature: an update brings installed items to their newe
 - `GET /api/apt/search` searches the apt repositories by name for the install-by-name box on the Apps page.
 - `POST /api/packages/install` installs a package by its repository name through one of the three managers. The name must pass the manager's shape check before the privileged command is built.
 
+## SLPM's own update check
+
+The top bar carries a version pill (`/api/selfupdate`, served from `slpm/selfupdate.py`) that answers one question: is there a newer release of SLPM itself, and how would the user get it? The check is read-only and free of mode gating, because it reads nothing beyond the environment and changes nothing on the system.
+
+- The running version comes from `slpm/__init__.py`. The newest one comes from the repository's `releases/latest` API, with a timeout, a User-Agent identifying SLPM, and an honest failure: rate limits, HTTP errors and unreachable servers each become their own message instead of a generic app error.
+- Which of the two published AppImages matters is decided server-side from `$APPIMAGE`, the path the AppImage runtime exports. A file name of the pinned `SLPM_*` or `SLPM-Desktop_*` shape selects the web or desktop variant; anything else - a source checkout, a renamed file - is reported `unknown`, and the answer then carries the command pairs for both variants instead of guessing.
+- The commands are derived only from the release's own asset list. If the release ships `SHA256SUMS.txt` (the release workflow generates it), the download command also fetches and verifies it with `sha256sum --ignore-missing -c`. The version comparison refuses to order what it cannot parse (`release-2`, a source checkout) and reports `unknown` instead of guessing an order.
+
+SLPM does not install its own update: replacing a running AppImage means stopping the very server that is answering the request, so the honest output of the check is two short terminal commands - one to download and verify, one to run - for the user to paste. The release workflow pins both file-name shapes and this module pins the same shapes, so a changed name on either side stops producing commands rather than producing wrong ones.
+
 ## HTTP and web interface
 
 Flask serves the pages and static assets in `static/`. The server is waitress when it is installed — threaded, and it stays alive across the long package operations — with the Flask development server as a fallback. JSON endpoints cover browser preferences, lists, file detection, installation, downloads, launching, removal and operation status. Browser code sends paths and explicit choices, but the server revalidates archive selection, removal paths, ownership, view mode and operation inputs.
