@@ -56,6 +56,10 @@ FLATPAK_USER = Path.home() / ".local/share/flatpak/app"
 
 # A date line in dpkg.log: "2026-04-23 01:15:04 install base-files:amd64 <none> 14ubuntu6"
 _LOG_LINE = re.compile(r"^(\d{4}-\d{2}-\d{2}) \d{2}:\d{2}:\d{2} (\w+) (\S+)")
+# A status line: "2026-04-23 01:18:10 status unpacked firefox:amd64 149.0" - the
+# state word sits where a package name would, so the package is the token after it.
+_STATUS_LINE = re.compile(
+    r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} status \S+ (\S+)")
 # Only these actions mean "this package is present on the system now".
 _PRESENCE_ACTIONS = frozenset(("install", "configure", "status", "unpack", "upgrade"))
 
@@ -163,6 +167,15 @@ def _build_log_dates():
                 continue
             if earliest is None or date < earliest:
                 earliest = date
+            if action == "status":
+                # "status unpacked firefox:amd64": the state word was parsed as the
+                # package; the real package is the token after it. The install /
+                # unpack / upgrade / configure shapes already arrive with the package
+                # in the right place and are recorded unchanged.
+                sm = _STATUS_LINE.match(line)
+                if not sm:
+                    continue
+                package = sm.group(1)
             name = package.split(":", 1)[0]
             if name not in dates or date < dates[name]:
                 dates[name] = date

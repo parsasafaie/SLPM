@@ -504,4 +504,14 @@ _FA = {
     "Snap name, like code": "نام snap، مثل code",
     "Searching…": "در حال جست‌وجو…",
     "No packages matched.": "بسته‌ای مطابق پیدا نشد.",
+
+    # ------------------------------------------------------------- audit fixes
+    "The requested version is not a valid apt version string.":
+        "نسخهٔ درخواست‌شده یک رشتهٔ نسخهٔ معتبر apt نیست.",
+    "The reply from the privileged helper was lost. The operation may have "
+    "already finished; check the result before retrying.":
+        "پاسخ از دستیار ممتاز گم شد. ممکن است عملیات پایان یافته باشد؛ پیش از "
+        "تلاش دوباره، نتیجه را بررسی کنید.",
+    "Could not reach the flathub repository.":
+        "به مخزن flathub نمی‌توان دسترسی پیدا کرد.",
 }

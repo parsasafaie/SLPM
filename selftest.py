@@ -104,14 +104,14 @@ const PREFS = stripComments(fs.readFileSync('static/js/prefs.js', 'utf8'));
 const FA = eval('(' + extractObject(PREFS, 'const FA = {') + ')');
 
 // Every literal key any page script hands to the catalog, including keys built by
-// concatenating string pieces. The closing quote is part of the pattern: without it
-// the last piece of a concatenated key is silently dropped.
-const KEY_RE = /(?:\bT\(|\bTT\(|\btt\()\s*((?:'[^']*'\s*\+\s*)*'[^']*')/g;
+// concatenating string pieces, in either quote style. The closing quote is part of
+// the pattern: without it the last piece of a concatenated key is silently dropped.
+const KEY_RE = /(?:\bT\(|\bTT\(|\btt\()\s*((?:"[^"]*"|'[^']*')(?:\s*\+\s*(?:"[^"]*"|'[^']*'))*)/g;
 const calls = new Set();
 for (const f of fs.readdirSync('static/js').filter(f => f.endsWith('.js'))) {
   const code = stripComments(fs.readFileSync('static/js/' + f, 'utf8'));
   for (const m of code.matchAll(KEY_RE)) {
-    calls.add([...m[1].matchAll(/'([^']*)'/g)].map(x => x[1]).join(''));
+    calls.add([...m[1].matchAll(/'([^']*)'|"([^"]*)"/g)].map(x => x[1] ?? x[2]).join(''));
   }
 }
 
@@ -125,7 +125,8 @@ for (const key of [...calls].sort()) {
 const SRC = fs.readFileSync('static/js/prefs.js', 'utf8');
 for (const lang of ['en', 'fa']) {
   globalThis.document = { documentElement: { dataset: { lang, theme: 'light' } },
-                          cookie: '', querySelector: () => null };
+                          cookie: '', querySelector: () => null,
+                          getElementById: () => null };
   globalThis.window = { location: { href: 'http://x/', replace() {} } };
   globalThis.fetch = () => Promise.resolve({ json: () => Promise.resolve({}) });
   const TT = eval(SRC + '\nTT');
@@ -351,29 +352,39 @@ check("an entry SLPM added is the user's",
 section("Simple and Advanced views")
 
 if not SKIP_MACHINE:
-    # The whole point of the split: Simple Mode must be a strict subset of Advanced, and
-    # the two must not be the same list. Both halves are checked, because a filter that
-    # silently stopped filtering would still look correct from the Simple side alone.
-    # All of it reads this machine's real app and startup lists, so it is the part CI
-    # skips: on a clean box "the user installed apps" is not true.
+    # The whole point of the split: Simple Mode must be a subset of Advanced (equal
+    # when every app is the user's is still the filter working), and a simple list
+    # may legitimately be empty - a machine with nothing user-installed shows
+    # nothing - so the emptiness check only runs when ownership still finds
+    # user-installed entries to show. All of it reads this machine's real app and
+    # startup lists, so it is the part CI skips: on a clean box "the user installed
+    # apps" is not true.
     _simple = apps.apps("simple")
     _adv = apps.apps("advanced")
-    check("simple is not empty on this machine", bool(_simple), True)
-    check("advanced is a strict superset of simple",
-          len(_adv) > len(_simple), True)
-    check("every simple app is marked as the user's",
-          all(a["user_installed"] for a in _simple), True)
-    check("no pre-installed app leaks into simple",
-          all(a.get("ownership") in ("package-added", "snap-added", "flatpak-added",
-                                     "user-file")
-              for a in _simple), True)
-    check("the advanced view still marks ownership",
-          all("user_installed" in a for a in _adv), True)
+    if not _adv:
+        print("skip  view-shape checks (this machine has no apps to show)")
+    else:
+        check("advanced is a superset of simple",
+              len(_adv) >= len(_simple), True)
+        _user_entries = sum(1 for r in desktop.collect("advanced")
+                            if ow.classify_desktop_entry(r)[0])
+        if _user_entries:
+            check("simple is not empty on this machine", bool(_simple), True)
+        else:
+            print("skip  simple emptiness (nothing user-installed to show)")
+        check("every simple app is marked as the user's",
+              all(a["user_installed"] for a in _simple), True)
+        check("no pre-installed app leaks into simple",
+              all(a.get("ownership") in ("package-added", "snap-added", "flatpak-added",
+                                         "user-file")
+                  for a in _simple), True)
+        check("the advanced view still marks ownership",
+              all("user_installed" in a for a in _adv), True)
 
     _su = autostart.collect("simple")
     _sa = autostart.collect("advanced")
-    check("advanced startup shows more than simple",
-          len(_sa) > len(_su), True)
+    check("advanced startup shows at least as much as simple",
+          len(_sa) >= len(_su), True)
     check("every simple startup entry is the user's",
           all(a["user_owned"] for a in _su), True)
 else:
@@ -906,13 +917,16 @@ if proc.which("apt-get"):
 else:
     print("skip  live apt simulation (apt-get not installed)")
 
-# The per-row update button takes a name from the browser, so a bad one must die at
-# the validator and never reach a command line or a privilege prompt. All three
-# checks use names the validators reject, so nothing is executed.
+# The per-row update button takes a name and a version from the browser, so both
+# must die at the validator and never reach a command line or a privilege prompt.
+# All of these use names/versions the validators reject, so nothing is executed.
 section("Single-item update names are checked before anything runs")
 ok, msg, _ = apt.upgrade_one("bad;name")
 check("apt refuses a malformed name", ok, False)
 check("apt says why", "does not look like a package name" in msg, True)
+ok, msg, _ = apt.upgrade_one("vlc", "1.0;rm -rf /")
+check("apt refuses a malformed version string", ok, False)
+check("apt says why the version is refused", "not a valid apt version" in msg, True)
 ok, msg, _ = flatpak_snap.snap_refresh_one("bad;name")
 check("snap refuses a malformed name", ok, False)
 ok, msg, _ = flatpak_snap.flatpak_update_one("bad id")
@@ -1095,13 +1109,14 @@ for source in list((ROOT / "slpm").glob("*.py")) + [ROOT / "app.py"]:
 untranslated = sorted(text for text in wrapped if text not in i18n._FA)
 check("every _t() message has a Persian entry", untranslated, [])
 
-# Every {{ t('...') }} key a template renders must have a Persian entry, or the page
-# silently shows English in Persian mode. The keys are read from the templates rather
-# than listed here, so a new one is covered the moment it is written.
+# Every {{ t('...') }} or {{ t("...") }} key a template renders must have a Persian
+# entry, or the page silently shows English in Persian mode. The keys are read from
+# the templates rather than listed here, so a new one is covered the moment it is
+# written - in either quote style.
 template_keys = set()
 for tpl in (ROOT / "templates").glob("*.html"):
-    for m in re.finditer(r"t\('([^']*)'", tpl.read_text()):
-        template_keys.add(m.group(1))
+    for m in re.finditer(r"""t\((['"])([^'"]*)\1""", tpl.read_text()):
+        template_keys.add(m.group(2))
 check("every template string has a Persian entry",
       sorted(k for k in template_keys if k not in i18n._FA), [])
 
@@ -1255,11 +1270,12 @@ r = client.post("/api/packages/remove", json={"name": "-rf", "confirmed": "-rf"}
 check("a non-package removal name is a 400", r.status_code, 400)
 r = client.post("/api/updates/run", json={"manager": "git", "step": "update"})
 check("an unknown update manager is a 400", r.status_code, 400)
-# A per-row update with a bad name must be refused by the validator, not executed.
+# A per-row update with a bad name must be refused by the endpoint's own validator,
+# the 400 every other malformed input gets, not executed and answered 200.
 r = client.post("/api/updates/run", json={"manager": "apt", "step": "update",
                                           "name": "bad;name"})
 j = r.get_json() or {}
-check("a malformed single-update name is refused", (r.status_code, j.get("ok")), (200, False))
+check("a malformed single-update name is refused", (r.status_code, j.get("ok")), (400, False))
 if proc.which("apt-get"):
     r = client.get("/api/packages")
     check("GET /api/packages answers in Advanced Mode", r.status_code, 200)
@@ -1288,6 +1304,31 @@ r = client.post("/api/shortcuts/add", json={"name": "", "exec": ""})
 check("POST /api/shortcuts/add with empty name fails", (r.get_json() or {}).get("ok"), False)
 r = client.post("/api/shortcuts/remove", json={"id": "nonexistent.desktop"})
 check("POST /api/shortcuts/remove with nonexistent id fails", (r.get_json() or {}).get("ok"), False)
+
+# A request that is not JSON - wrong Content-Type or a broken body - must meet
+# the same JSON envelope every page already understands, never Flask's HTML
+# 400/415 error page.
+r = client.post("/api/install", data="this is not json", content_type="text/plain")
+check("a text/plain install POST answers JSON, not HTML",
+      isinstance(r.get_json(silent=True), dict), True)
+
+# The version lives in slpm/__init__.py and is repeated by hand in the release
+# files; a bump that misses one of them ships AppImages and download links that
+# disagree with the running app. These checks read the files, so the next bump
+# is covered the moment it happens.
+section("Release files agree on the package version")
+_v = __import__("slpm").__version__
+for _meta in sorted((ROOT / "appimage").glob("*.metainfo.xml")):
+    check(f"{_meta.name} announces version {_v}",
+          f'<release version="{_v}"' in _meta.read_text(), True)
+for _doc in (ROOT / "README.md", ROOT / "README.fa.md", ROOT / "docs" / "index.html"):
+    _text = _doc.read_text()
+    check(f"{_doc.name} names this version's web asset",
+          f"SLPM_{_v}-x86_64.AppImage" in _text, True)
+    check(f"{_doc.name} names this version's desktop asset",
+          f"SLPM-Desktop_{_v}-x86_64.AppImage" in _text, True)
+check("the release workflow's fallback tag matches",
+      f'"v{_v}"' in (ROOT / ".github" / "workflows" / "release.yml").read_text(), True)
 
 print()
 if FAILED:

@@ -16,6 +16,13 @@ def atomic_write(path, text):
     """
     path = os.fspath(path)
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    # mkstemp creates the temporary file 0600, and the rename would keep that mode
+    # over a pre-existing file with looser permissions. Whichever way the target
+    # already exists, its mode (or 0644 for a fresh file) is what the result keeps.
+    try:
+        mode = os.stat(path).st_mode & 0o777
+    except OSError:
+        mode = 0o644
     fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path) or ".", prefix=".slpm-")
     try:
         with os.fdopen(fd, "w") as fh:
@@ -27,6 +34,10 @@ def atomic_write(path, text):
         except OSError:
             pass
         raise
+    try:
+        os.chmod(path, mode)
+    except OSError:
+        pass
 
 
 _SLUG_RE = re.compile(r"[^A-Za-z0-9._-]+")

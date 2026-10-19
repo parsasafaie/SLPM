@@ -103,7 +103,9 @@ def _body(name, command, icon="", comment=""):
     ]
     if comment:
         lines.append(f"Comment={comment}")
-    lines.append(f"Exec={command}")
+    # The command line was field-code cleaned by clean_exec() upstream; only the
+    # control characters are stripped here, so a newline in it cannot corrupt the file.
+    lines.append(f"Exec={_clean_field(command)}")
     if icon:
         lines.append(f"Icon={icon}")
     lines += [f"{_GNOME_ENABLED}=true", f"{_HIDDEN}=false", ""]

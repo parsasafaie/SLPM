@@ -138,13 +138,23 @@ async function copyText(text) {
   return ok;
 }
 
+let versionCheckBusy = false;
 if ($('#version-pill')) ($('#version-pill').onclick = async () => {
+  // A double click (or a click while a stale check is still in flight) must not open
+  // a second modal cycle on top of the first.
+  if (versionCheckBusy) return;
+  versionCheckBusy = true;
   modal({
     title: T('Check for a new version of SLPM'),
     html: `<p class="muted">${esc(T('Checking…'))}</p>`,
     buttons: [{ label: T('Close'), kind: 'ghost' }],
   });
+  // Captured before the await: if the user dismissed the checking dialog (or opened a
+  // different one) while the server answered, the result must not reopen over it.
+  const checkingBody = $('#modal .body');
   const data = await api('/api/selfupdate');
+  versionCheckBusy = false;
+  if (!checkingBody || !checkingBody.isConnected) return;
   if (!data || !data.ok) {
     modal({
       title: T('Check for a new version of SLPM'),

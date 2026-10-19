@@ -25,11 +25,21 @@ def _slug(name):
 def _appimage_meta(path, tmpdir):
     """Ask the AppImage to unpack itself; return (name, icon_path, payload_root, error)."""
     AppImage = Path(path).resolve()
+    # The original file is the user's download: its mode must survive the unpack,
+    # so the executable bit is granted only around --appimage-extract and taken
+    # back off immediately afterwards.
+    original_mode = AppImage.stat().st_mode
     os.chmod(AppImage, 0o755)
-    # --appimage-extract is supported by type-2 AppImages and needs no sandbox.
-    rc, out, err = proc.run(
-        [str(AppImage), "--appimage-extract"], cwd=tmpdir, timeout=180
-    )
+    try:
+        # --appimage-extract is supported by type-2 AppImages and needs no sandbox.
+        rc, out, err = proc.run(
+            [str(AppImage), "--appimage-extract"], cwd=tmpdir, timeout=180
+        )
+    finally:
+        try:
+            os.chmod(AppImage, original_mode)
+        except OSError:
+            pass
     root = Path(tmpdir) / "squashfs-root"
     if rc != 0 or not root.is_dir():
         # Not a type-2 AppImage, or it needs FUSE to unpack and could not.
@@ -46,19 +56,22 @@ def _appimage_meta(path, tmpdir):
             name = entry["Name"]
             icon = entry.get("Icon")
             break
+    if icon:
+        cand = None
+        for ext in ("", ".png", ".svg", ".xpm"):
+            if (root / f"{icon}{ext}").exists():
+                cand = root / f"{icon}{ext}"
+                break
+        icon = str(cand) if cand else None
     if not icon:
+        # The Icon= name often does not resolve at the root of the extracted
+        # image (a usr/share/icons layout is common), so this fallback runs
+        # whenever no icon file has been resolved - Icon= present or not.
         for pat in (".DirIcon", "*.png", "*.svg"):
             hits = sorted(root.glob(pat))
             if hits:
                 icon = str(hits[0])
                 break
-    else:
-        cand = root / icon
-        for ext in ("", ".png", ".svg", ".xpm"):
-            if (root / f"{icon}{ext}").exists():
-                cand = root / f"{icon}{ext}"
-                break
-        icon = str(cand) if cand.exists() else None
     if not name:
         name = _slug(AppImage.stem).replace("-", " ").title()
     return name, icon, root, ""

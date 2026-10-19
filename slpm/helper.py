@@ -129,10 +129,14 @@ def spawn(sock_path, log_path):
 
     with os.fdopen(log_fd, "ab") as log:
         try:
-            subprocess.Popen(argv, stdout=log, stderr=log, stdin=subprocess.DEVNULL,
-                             **kwargs)
+            popen = subprocess.Popen(argv, stdout=log, stderr=log,
+                                     stdin=subprocess.DEVNULL, **kwargs)
         except OSError as exc:
             return False, proc.t("Could not start the privileged helper: {exc}", exc=exc)
+
+    # The helper exits on its own once it has idled out; keep the handle and reap it
+    # in the background, so it never lingers as a zombie in the server's process table.
+    threading.Thread(target=popen.wait, daemon=True).start()
 
     for _ in range(60):  # up to ~30s: the user may be typing a password
         time.sleep(0.5)

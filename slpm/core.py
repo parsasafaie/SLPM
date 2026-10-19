@@ -29,6 +29,8 @@ _t = proc.t
 
 _job_lock = threading.Lock()
 _job = {"active": False, "label": ""}
+# Set only under _job_lock, when run_exclusive() refuses a caller.
+_lost_job_label = ""
 
 
 def current_job():
@@ -37,17 +39,29 @@ def current_job():
         return {"active": _job["active"], "label": _job["label"]}
 
 
+def lost_job_label():
+    """The label of the job that was running when the caller was refused.
+
+    Taken under the same lock acquisition that delivered the refusal, so the
+    busy reply names the operation the caller actually raced against, even if
+    that operation has since finished.
+    """
+    return _lost_job_label
+
+
 def run_exclusive(label, fn):
     """Run ``fn`` as the one active package operation.
 
     Returns ``fn()``'s result, or ``None`` when another operation is already
-    running (the caller can read its label from :func:`current_job`). Whatever
-    happens inside ``fn`` - including an exception - the job state is cleared
-    and the packages/app caches are dropped afterwards, so a list read after
-    the operation reflects the new facts on disk.
+    running (the caller can read its label from :func:`lost_job_label`).
+    Whatever happens inside ``fn`` - including an exception - the job state is
+    cleared and the packages/app caches are dropped afterwards, so a list read
+    after the operation reflects the new facts on disk.
     """
+    global _lost_job_label
     with _job_lock:
         if _job["active"]:
+            _lost_job_label = _job["label"]
             return None
         _job["active"] = True
         _job["label"] = label

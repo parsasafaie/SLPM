@@ -55,16 +55,21 @@ function applyModeChrome() {
 /* --------------------------------------------------------------- loading */
 
 async function load() {
+  // Sequence token: switching modes starts a new load, and a slow response for the
+  // previous mode must never paint over the current one's data (or clear its loader).
+  const seq = ++loadSeq;
   setLoading(true, state.mode === 'simple'
     ? T('Reading your installed apps…')
     : T('Reading apt/dpkg packages…'));
   if (state.mode === 'simple') {
     const r = await api('/api/apps');
+    if (seq !== loadSeq) return;
     setLoading(false);
     if (!r.ok) return toast(T('Could not list apps'), r.message, 'bad');
     state.items = r.apps || [];
   } else {
     const r = await api('/api/packages');
+    if (seq !== loadSeq) return;
     setLoading(false);
     if (!r.ok) return toast(T('Could not list apt/dpkg packages'), r.message, 'bad');
     state.items = (r.packages || []).map(p => ({
@@ -74,8 +79,10 @@ async function load() {
       can_launch: false,
     }));
   }
+  if (seq !== loadSeq) return;
   render();
 }
+let loadSeq = 0;
 
 function render() {
   const q = state.query.toLowerCase();
@@ -179,11 +186,16 @@ async function details(item) {
     html: `<p class="muted">${esc(T('Reading details…'))}</p>`,
     buttons: [{ label: T('Close'), kind: 'ghost', onClick: closeModal }]
   });
+  // The body element must be captured before any await: if the user closes the dialog
+  // (or a new one replaces it) while the request runs, a late response must not throw
+  // on a missing node or clobber whatever dialog is on screen now.
+  const body = $('#modal .body');
   // The package database endpoint is Advanced-only, so Simple Mode shows the row it
   // already has. Asking anyway would answer 403 and leave the panel empty.
   let extra = '';
   if (state.mode === 'advanced' && item.package && item.manager === 'apt') {
     const r = await api(`/api/packages/${encodeURIComponent(item.package)}`);
+    if (!body || !body.isConnected) return;
     if (r.ok) {
       const p = r.package;
       extra = kv({
@@ -202,7 +214,8 @@ async function details(item) {
       [T('Command')]: item.exec,
     });
   }
-  $('#modal .body').innerHTML = `<p>${esc(item.summary || item.comment || '')}</p>${extra}`;
+  if (!body || !body.isConnected) return;
+  body.innerHTML = `<p>${esc(item.summary || item.comment || '')}</p>${extra}`;
 }
 
 async function pkgDetails(name, essential) {
@@ -211,8 +224,11 @@ async function pkgDetails(name, essential) {
     html: `<p class="muted">${esc(T('Reading apt/dpkg packages…'))}</p>`,
     buttons: [{ label: T('Close'), kind: 'ghost', onClick: closeModal }]
   });
+  // Capture the body before the await (see details() above).
+  const body = $('#modal .body');
   const r = await api(`/api/packages/${encodeURIComponent(name)}`);
-  if (!r.ok) { $('#modal .body').innerHTML = `<p>${esc(r.message)}</p>`; return; }
+  if (!body || !body.isConnected) return;
+  if (!r.ok) { body.innerHTML = `<p>${esc(r.message)}</p>`; return; }
   const p = r.package;
   // Essential packages can be removed only in Advanced Mode, after typing the package
   // name; apt then receives --allow-remove-essential. Other system components can also
@@ -226,7 +242,8 @@ async function pkgDetails(name, essential) {
       : '';
   const depends = p.Depends && p.Depends.toLowerCase() !== 'none'
     ? p.Depends : T('none');
-  $('#modal .body').innerHTML = warn +
+  if (!body || !body.isConnected) return;
+  body.innerHTML = warn +
     `<p>${esc((p.Description || '').split('\n')[0])}</p>` +
     kv({
       [T('Version')]: p.Version, [T('Size')]: p.installed_size,
@@ -278,7 +295,7 @@ function removeApp(item) {
     || T('The shortcut and the installed files for this app will be deleted.');
   // Snap, Flatpak and apt are package-manager removals, so an admin password is asked
   // for; removing a shortcut SLPM wrote itself needs no privileges.
-  const needsRoot = ['apt', 'snap'].includes(item.manager);
+  const needsRoot = ['apt', 'snap', 'flatpak'].includes(item.manager);
   modal({
     title: T('Remove {name}?', { name: item.name }),
     html: `<p>${esc(what)}</p>

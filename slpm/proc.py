@@ -105,7 +105,10 @@ def run(argv, timeout=TIMEOUT, env=None, cwd=None, stdin_text=None):
     if not which(argv[0]):
         return 127, "", f"command not found: {argv[0]}"
     e = dict(os.environ)
-    e.setdefault("LANG", "C.UTF-8")
+    # Forced (not setdefault): the English-text heuristics in _apt_reason and
+    # _is_auth_failure only work when the tools answer in English, so a localized
+    # desktop's LANG/LC_ALL must not leak into a package tool invocation.
+    e["LANG"] = e["LC_ALL"] = "C.UTF-8"
     e["DEBIAN_FRONTEND"] = "noninteractive"
     if env:
         e.update(env)
@@ -162,7 +165,16 @@ def privileged(argv, timeout=TIMEOUT):
     # The client timeout must cover the helper's own execution budget: an operation
     # the helper is allowed to run for 900s must not be declared dead at 300s, or the
     # same work would be reissued through pkexec while the first copy still runs.
-    rc = helper.client(helper_socket(), argv, timeout=max(timeout, helper.RUN_TIMEOUT))
+    sock = helper_socket()
+    rc = helper.client(sock, argv, timeout=max(timeout, helper.RUN_TIMEOUT))
+    if rc is None and sock and not helper._stale(sock):
+        # The socket was listening moments ago, so the command was delivered but its
+        # reply never came back: the operation may already have run as root, and
+        # issuing it again could repeat the work. Only a helper that never started
+        # (socket missing, stale, or refusing connections) falls through to the
+        # pkexec / sudo attempts below.
+        return -2, "", t("The reply from the privileged helper was lost. The operation "
+                         "may have already finished; check the result before retrying.")
     if rc is not None and rc[0] != 126:
         return rc
 
@@ -176,11 +188,12 @@ def privileged(argv, timeout=TIMEOUT):
         if rc == 0:
             return rc, out, err
         if rc == -1:
-            auth_err = t("The command did not finish in time. It may still be running; "
-                         "close any package tool and try again.")
-        else:
-            auth_err = err
-        if rc != -1 and not _is_auth_failure(err):
+            # The root child may still be running: reissuing the same privileged
+            # work under sudo must not happen, so report and stop here.
+            return -2, "", t("The command did not finish in time. It may still be "
+                             "running; close any package tool and try again.")
+        auth_err = err
+        if not _is_auth_failure(err):
             return rc, out, err
 
     if which("sudo"):

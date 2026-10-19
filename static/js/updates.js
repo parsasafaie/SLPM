@@ -51,7 +51,9 @@ async function load() {
   setLoading(true);
   const r = await api('/api/updates');
   setLoading(false);
-  if (!r.ok) return;
+  // Without this toast a failed /api/updates leaves the page silently blank: the
+  // loader is cleared, the cards stay hidden and nothing says why.
+  if (!r.ok) return toast(T('Failed'), [r.message, r.detail].filter(Boolean).join(' '), 'bad');
   cards.forEach(c => c.classList.remove('hidden'));
   for (const mgr of ['apt', 'flatpak', 'snap']) {
     paint(mgr, r[mgr] || [], r.managers ? r.managers[mgr] : true);

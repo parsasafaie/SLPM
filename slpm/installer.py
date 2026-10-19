@@ -1,4 +1,5 @@
 """Decide what a dropped file is and install it the right way."""
+import re
 import shutil
 import zipfile
 from pathlib import Path
@@ -125,7 +126,8 @@ def _flatpakref(path):
                         "(Advanced mode -> flatpak)."), "flatpakref")
     # User level on purpose: this must land where flatpak_uninstall looks again. A
     # root install goes to the system installation, which this UI could not remove.
-    rc, out, err = proc.run(["flatpak", "install", "-y", "--from", str(path)], timeout=900)
+    rc, out, err = proc.run(["flatpak", "install", "-y", "--user", "--from", str(path)],
+                            timeout=900)
     if rc == 0:
         return {"ok": True, "kind": "flatpakref", "title": "Flatpak",
                 "message": _t("Installed."), "detail": "", "desktop_file": None,
@@ -190,6 +192,44 @@ def _resolve_choice(choice, launchers):
     return None
 
 
+def _first_token_span(exec_line):
+    """(start, end) of the first command token in a raw Exec= line, or None.
+
+    The scan mirrors desktop.exec_argv (quotes group, %% is a literal percent, % codes
+    are dropped), so the span is the exact bytes the parser would read as argv[0].
+    A line that quotes the first token - or quotes anything at all before the token
+    ends - has no single bare span to rewrite, and None is the honest answer then.
+    """
+    start = None
+    quote = None
+    field = False
+    for i, ch in enumerate(exec_line):
+        if field:
+            field = False
+            continue
+        if quote:
+            if ch == quote:
+                quote = None
+            continue
+        if ch in "\"'":
+            return None
+        if ch == "%":
+            field = True
+            continue
+        if ch == " ":
+            if start is not None:
+                return start, i
+            continue
+        if start is None:
+            start = i
+    return (start, len(exec_line)) if start is not None else None
+
+
+# An env-style assignment ("WINEPREFIX=/… app") is a variable name, not a command,
+# and must never be rewritten into a quoted path.
+_ENV_ASSIGNMENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
+
+
 def _register_launcher(launcher, root):
     p = Path(launcher["path"])
     name = launcher["name"]
@@ -202,8 +242,17 @@ def _register_launcher(launcher, root):
         exec_line = entry.get("Exec", "")
         argv = desktop.exec_argv(exec_line)
         if argv and not argv[0].startswith("/"):
-            resolved = shutil.which(argv[0]) or str((root / argv[0]).resolve())
-            exec_line = exec_line.replace(argv[0], f'"{resolved}"', 1)
+            # Rewriting by substring ("sh" inside "bash") could corrupt the line:
+            # the first parsed element is replaced only where it actually sits in
+            # the raw line, as a bare token starting at the span above. Anything
+            # less certain - a quoted command, an env var name - leaves the line
+            # exactly as it was.
+            span = _first_token_span(exec_line)
+            if (span is not None and not _ENV_ASSIGNMENT.match(argv[0])
+                    and exec_line[span[0]:span[1]] == argv[0]):
+                resolved = shutil.which(argv[0]) or str((root / argv[0]).resolve())
+                exec_line = (f'{exec_line[:span[0]]}"{resolved}"'
+                             f'{exec_line[span[1]:]}')
         icon = entry.get("Icon")
         icon_path = None
         if icon:

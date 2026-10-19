@@ -183,6 +183,16 @@ def _bad_name(name):
     return not proc.is_apt_pkg(name)
 
 
+_APT_VERSION = re.compile(r"^[A-Za-z0-9+.:~-]+$")      # 1:2.92-1ubuntu0.4+really
+
+
+def _bad_version(version):
+    """A version outside the apt version charset is refused before ``name=version``
+    reaches a command line, so a caller-chosen version can never break out of the
+    single ``name=version`` operand (extra option, second operand, whitespace)."""
+    return not _APT_VERSION.match(version or "")
+
+
 def install_name(name):
     """Install a package by its repository name (not a file)."""
     if _bad_name(name):
@@ -215,6 +225,8 @@ def upgrade_one(name, version=""):
     """
     if _bad_name(name):
         return False, _t("This does not look like a package name: {name}", name=name), ""
+    if version and _bad_version(version):
+        return False, _t("The requested version is not a valid apt version string."), ""
     target = f"{name}={version}" if version else name
     rc, out, err = proc.privileged(["apt-get", "install", "-y", target])
     if rc == 0:

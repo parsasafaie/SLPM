@@ -60,9 +60,16 @@ def flatpak_install(app_id):
     remote = "flathub"
     if "flathub" not in remotes:
         # No flathub (or no remote at all): add it at user level, the standard one.
-        proc.run(["flatpak", "remote-add", "--if-not-exists", "flathub",
-                  "https://dl.flathub.org/repo/flathub.flatpakrepo"], timeout=120)
-    rc, out, err = proc.run(["flatpak", "install", "-y", remote, app_id], timeout=900)
+        rc_add, out_add, err_add = proc.run(
+            ["flatpak", "remote-add", "--if-not-exists", "flathub",
+             "https://dl.flathub.org/repo/flathub.flatpakrepo"], timeout=120)
+        if rc_add != 0:
+            # A remote that would not add is a repository that cannot be reached;
+            # installing from it cannot work, so say so instead of trying.
+            return False, _t("Could not install {app_id}.", app_id=app_id), \
+                _t("Could not reach the flathub repository.")
+    rc, out, err = proc.run(["flatpak", "install", "-y", "--user", remote, app_id],
+                            timeout=900)
     if rc == 0:
         return True, _t("{app_id} was installed.", app_id=app_id), ""
     return False, _t("Could not install {app_id}.", app_id=app_id), _last_line(out, err)

@@ -11,7 +11,7 @@ import re
 import time
 from pathlib import Path
 
-from . import proc, util
+from . import i18n, proc, util
 
 _t = proc.t
 
@@ -54,6 +54,11 @@ _NOISE_EXEC = re.compile(
 )
 
 
+# Localized key like Name[en]: only the exact locales the app serves are kept in
+# the parsed dict (they feed _resolve_localized), every other locale suffix is skipped.
+_LOCALIZED_KEY = re.compile(r"^(.+)\[([^\[\]]*)\]$")
+
+
 def parse(path):
     """Parse a .desktop file. Returns dict with keys of the [Desktop Entry] group."""
     data = {}
@@ -74,7 +79,12 @@ def parse(path):
         key, _, value = line.partition("=")
         key = key.strip()
         if key.endswith("[") or key.lower().endswith(("$", "]")):
-            continue  # localized key like Name[de]
+            m = _LOCALIZED_KEY.match(key)
+            if m and m.group(2).lower() in i18n.LANGS:
+                # Name[en] and Name[fa] are kept: with no untranslated Name in the
+                # file, _resolve_localized falls back to the localized one.
+                data.setdefault(key, value.strip())
+            continue  # any other localized key like Name[de]
         if "[" in key:
             continue
         data.setdefault(key, value.strip())
@@ -144,17 +154,30 @@ def exec_argv(exec_line):
     """Turn a .desktop Exec= line into an argv list, dropping field codes and quotes.
 
     Quoting is legal in Exec= (SLPM writes it itself for paths with spaces), so the
-    quotes have to come off before the arguments are used as filesystem paths.
+    quotes have to come off before the arguments are used as filesystem paths. The
+    Desktop Entry Specification's escapes are honoured: ``%%`` yields one literal
+    percentage sign, and inside double quotes a backslash-escaped quote does not
+    close the quoted string (``"a\\"b"`` is one argument containing a quote).
     """
     parts = []
     buf = ""
     field = False
     quote = None
-    for ch in exec_line:
+    i = 0
+    n = len(exec_line)
+    while i < n:
+        ch = exec_line[i]
+        i += 1
         if field:
             field = False
             continue
         if quote:
+            if quote == '"' and ch == "\\" and i < n and exec_line[i] in ('"', "\\"):
+                # An escaped quote (or backslash) inside double quotes: the next
+                # character is literal and the string stays open.
+                buf += exec_line[i]
+                i += 1
+                continue
             if ch == quote:
                 quote = None
             else:
@@ -164,7 +187,12 @@ def exec_argv(exec_line):
             quote = ch
             continue
         if ch == "%":
-            field = True
+            if i < n and exec_line[i] == "%":
+                # %% is the spec's escape for a literal percentage sign.
+                buf += "%"
+                i += 1
+            else:
+                field = True
             continue
         if ch == " ":
             if buf:
@@ -381,6 +409,13 @@ def _safe_icon_file(path, search_roots):
     return None
 
 
+def _clean_field(text):
+    """A .desktop value is a single line. A newline or control character in a name,
+    comment or command would split the value into bogus keys and corrupt the file,
+    so they are stripped before anything is written (as autostart._clean_field does)."""
+    return re.sub(r"[\r\n\x00-\x1f\x7f]", "", text or "").strip()
+
+
 def desktop_file(name, exec_line, icon=None, comment="", categories=("Utility",),
                  terminal=False, path_override=None, mime=None):
     """Create ~/.local/share/applications/<slug>.desktop and refresh the database."""
@@ -390,11 +425,12 @@ def desktop_file(name, exec_line, icon=None, comment="", categories=("Utility",)
         "[Desktop Entry]",
         "Type=Application",
         "Version=1.0",
-        f"Name={name}",
+        f"Name={_clean_field(name)}",
     ]
+    comment = _clean_field(comment)
     if comment:
         body.append(f"Comment={comment}")
-    body.append(f"Exec={exec_line}")
+    body.append(f"Exec={_clean_field(exec_line)}")
     if icon:
         body.append(f"Icon={icon}")
     if terminal:

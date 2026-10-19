@@ -46,9 +46,10 @@ const SLPM = (() => {
     theme: document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light',
     mode: MODES.includes(document.documentElement.dataset.mode)
       ? document.documentElement.dataset.mode : 'simple',
-    /* Advanced Mode has been accepted in this page view. The cookie remembers the
-       choice across pages, but the warning is shown once per load, so a page the user
-       opened fresh does not silently start in the dangerous view. */
+    /* Advanced Mode has been accepted in this page view. The slpm_mode cookie persists
+       across page loads, so a page can be served - and rendered - in Advanced Mode
+       without this gate running; the warning only re-arms for a Simple→Advanced switch
+       made inside the page, not for a fresh load that the cookie already put there. */
     modeAllowed: false,
   };
 
@@ -625,6 +626,12 @@ const SLPM = (() => {
       ]
     });
   }
+
+  /* Init sync: the head script may have flipped data-theme to dark (a first visit with
+     an OS dark scheme and no stored choice) without anything else following it. Run the
+     same apply once here so the color-scheme meta tag and the #theme-toggle label and
+     aria-pressed match data.theme from the first paint onward. */
+  applyTheme(state.theme);
 
   return { state, tt, setLang, setTheme, toggleLang, toggleTheme, applyTheme, normalize,
            setMode, applyMode, onModeChange, askAdvanced };

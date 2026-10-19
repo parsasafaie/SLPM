@@ -173,17 +173,21 @@ async function addDialog() {
     html: `<p class="muted">${esc(T('Reading installed apps…'))}</p>`,
     buttons: [{ label: T('Cancel'), kind: 'ghost', onClick: closeModal }]
   });
+  // Capture the body before the await: if the user closed the dialog (or a different
+  // one replaced it) while the request ran, the response must not clobber that dialog.
+  const body = $('#modal .body');
   const r = await api('/api/startup/candidates');
+  if (!body || !body.isConnected) return;
   if (!r.ok) {
-    $('#modal .body').innerHTML = `<p>${esc(r.message)}</p>`;
+    body.innerHTML = `<p>${esc(r.message)}</p>`;
     return;
   }
   const apps = r.apps || [];
   if (!apps.length) {
-    $('#modal .body').innerHTML = `<p>${esc(T('No installed app with a launch command was found.'))}</p>`;
+    body.innerHTML = `<p>${esc(T('No installed app with a launch command was found.'))}</p>`;
     return;
   }
-  $('#modal .body').innerHTML = `
+  body.innerHTML = `
     <p class="muted small">${esc(T('Pick the app to add as a startup app.'))}</p>
     <input id="cand-search" type="search" placeholder="${esc(T('Search apps…'))}"
            aria-label="${esc(T('Search apps…'))}" autocomplete="off">

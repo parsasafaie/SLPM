@@ -37,16 +37,16 @@ A simple local web app for installing, viewing, launching, and removing Linux so
 Each release ships two self-contained AppImages — pick one (or both, many people run the desktop one daily and the dashboard one for a browser session):
 
 1. Download from [Releases](https://github.com/parsasafaie/SLPM/releases/latest):
-   - `SLPM_0.3.0-x86_64.AppImage` — the dashboard, opened in your browser
-   - `SLPM-Desktop_0.3.0-x86_64.AppImage` — the dashboard in a native window
+   - `SLPM_0.3.1-x86_64.AppImage` — the dashboard, opened in your browser
+   - `SLPM-Desktop_0.3.1-x86_64.AppImage` — the dashboard in a native window
    - `SHA256SUMS.txt` — the checksums of both images (the in-app version check's download command verifies them)
 2. Make it executable — in the file manager's *Properties → Permissions* check *Allow executing*, or in a terminal:
    ```bash
-   chmod +x SLPM-Desktop_0.3.0-x86_64.AppImage
+   chmod +x SLPM-Desktop_0.3.1-x86_64.AppImage
    ```
 3. Run it — double-click in the file manager, or:
    ```bash
-   ./SLPM-Desktop_0.3.0-x86_64.AppImage
+   ./SLPM-Desktop_0.3.1-x86_64.AppImage
    ```
 
 That's the whole installation: no root, no dependencies, nothing written system-wide. If you use [AppImageLauncher](https://github.com/TheAssassin/AppImageLauncher) or a desktop that offers it, the first run can also add SLPM to your applications menu; otherwise nothing is installed into the menu.

@@ -48,7 +48,7 @@ jobs:
           if [ "$EVENT_NAME" = "release" ]; then
             tag="$RELEASE_TAG"
           else
-            tag="v0.3.0"
+            tag="v0.3.1"
           fi
           version="${tag#v}"
           # The AppImage file names are SLPM_<version>-x86_64.AppImage and

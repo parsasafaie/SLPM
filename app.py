@@ -20,7 +20,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from slpm import apps as apps_mod
 from slpm import (apt, autostart, core, desktop, flatpak_snap, download, helper,
-                  installer, i18n, proc, selfupdate, shortcuts as shortcuts_mod, state)
+                  installer, i18n, ownership, proc, selfupdate,
+                  shortcuts as shortcuts_mod, state)
 
 log = logging.getLogger("slpm")
 
@@ -86,9 +87,11 @@ def _ui_mode():
     person's choice on one browser, and a server-side setting would hand the next
     person to open the page a view they did not ask for.
 
-    Simple is the default. Advanced is the view that can remove a package the machine
-    needs to boot, so it has to be entered deliberately - never arrived at by opening a
-    fresh browser.
+    Simple is the default: a browser with no cookie yet opens in Simple Mode. The
+    cookie itself persists across page loads, and honouring it on a fresh load is
+    by design - the browser's on-load advanced-mode gate protects only a browser
+    that has never chosen. Entering Advanced Mode happens deliberately through the
+    switch button, and it is that in-page switch the confirmation gate guards.
     """
     mode = (request.cookies.get(MODE_COOKIE) or "").strip().lower()
     return mode if mode in MODES else "simple"
@@ -121,7 +124,7 @@ def _template_defaults():
 @app.post("/api/prefs")
 def api_prefs():
     """Remember the language, theme and/or view mode choice for this browser."""
-    data = request.json or {}
+    data = _json_body()
     resp = make_response(jsonify({"ok": True}))
     max_age = 60 * 60 * 24 * 365
     if "lang" in data:
@@ -140,6 +143,17 @@ def api_prefs():
 
 # ------------------------------------------------------------------ helpers
 
+def _json_body():
+    """The request's JSON object, or an empty one when the body is none.
+
+    get_json(silent=True) returns None for a missing body, a malformed body or
+    a non-JSON Content-Type instead of raising, so such a request still gets
+    the JSON envelope every page understands - not one of Flask's HTML
+    400/415 error pages, which /api/detect used to escalate into a 500.
+    """
+    return request.get_json(silent=True) or {}
+
+
 def _err(exc):
     """Never leak a traceback to the UI; log it and return an explanation.
 
@@ -152,10 +166,17 @@ def _err(exc):
 
 
 def _busy_reply():
-    job = core.current_job()
-    return jsonify({"ok": False, "busy": True, "label": job["label"],
+    """The 409 answer for a request that lost the exclusive-job race.
+
+    The label is the snapshot core captured when the lock was lost, not a fresh
+    read: by the time this answers, the job may have finished, and re-reading
+    the current state used to produce an empty label or a busy flag with no
+    active job behind it.
+    """
+    label = core.lost_job_label()
+    return jsonify({"ok": False, "busy": True, "label": label,
                     "message": proc.t("{label} is still running. Wait for it to finish.",
-                                      label=job["label"])}), 409
+                                      label=label)}), 409
 
 
 def _web_icon_url(rec):
@@ -209,7 +230,7 @@ def page_updates():
 @app.post("/api/detect")
 def api_detect():
     try:
-        info = installer.detect((request.json or {}).get("path", ""))
+        info = installer.detect(_json_body().get("path", ""))
         return jsonify({"ok": True, **info})
     except Exception as exc:
         return _err(exc)
@@ -217,7 +238,7 @@ def api_detect():
 
 @app.post("/api/install")
 def api_install():
-    data = request.json or {}
+    data = _json_body()
     path = data.get("path", "")
     try:
         result = core.run_exclusive(
@@ -225,6 +246,10 @@ def api_install():
         if result is None:
             return _busy_reply()
         core.log_action("install", path, result.get("ok"), result.get("message"))
+        if result.get("ok"):
+            # A successful install changes the facts the Simple Mode verdicts were
+            # cached from; forget them so the next request reclassifies from disk.
+            ownership.reset_cache()
         return jsonify(result)
     except Exception as exc:
         return _err(exc)
@@ -250,7 +275,7 @@ def api_downloads():
 @app.post("/api/download/start")
 def api_download_start():
     """Start downloading a URL into the Downloads folder."""
-    result = download.start((request.json or {}).get("url", ""))
+    result = download.start(_json_body().get("url", ""))
     if not result.get("ok"):
         return jsonify(result), 400
     return jsonify(result)
@@ -259,7 +284,7 @@ def api_download_start():
 @app.post("/api/download/control")
 def api_download_control():
     """Pause, continue or stop a running download."""
-    data = request.json or {}
+    data = _json_body()
     job_id = data.get("id", "")
     action = data.get("action", "")
     result = download.control(job_id, action)
@@ -316,7 +341,7 @@ def api_launch():
     scan and runs that entry's own Exec= (or its package's manager command). Taking
     ``exec`` from the request made this endpoint a way to run any command as the user.
     """
-    data = request.json or {}
+    data = _json_body()
     entry_id = str(data.get("id", ""))
     try:
         rc, out, err = desktop.launch_by_id(entry_id)
@@ -337,11 +362,14 @@ def api_uninstall():
     pre-installed app cannot remove it: the app has to be found in the very list Simple
     Mode would show.
     """
-    data = request.json or {}
+    data = _json_body()
     manager, target = data.get("manager"), data.get("target", "")
     if not target:
         return jsonify({"ok": False,
                         "message": proc.t("Nothing was named to remove.")}), 400
+    if manager not in ("apt", "flatpak", "snap", "appimage", "desktop"):
+        return jsonify({"ok": False,
+                        "message": proc.t("SLPM does not manage this item.")}), 400
     if _ui_mode() != "advanced" and not core.user_installed(
             target=str(data.get("target") or ""), file_name=str(data.get("file") or "")):
         return _advanced_only()
@@ -365,6 +393,8 @@ def api_uninstall():
             return _busy_reply()
         ok, msg, detail = result
         core.log_action("uninstall", f"{manager}:{target}", ok, msg)
+        if ok:
+            ownership.reset_cache()
         return jsonify({"ok": ok, "message": msg, "detail": detail})
     except Exception as exc:
         return _err(exc)
@@ -429,7 +459,7 @@ def api_startup_add():
     any command on the user's auto-start list. The id must belong to the current
     view, so Simple Mode cannot add an app its list does not show.
     """
-    data = request.json or {}
+    data = _json_body()
     app_id = str(data.get("id", ""))
     try:
         rec = next((r for r in apps_mod.apps(_ui_mode()) if r["id"] == app_id), None)
@@ -453,12 +483,14 @@ def api_startup_toggle():
     re-derived from the server's own records, so posting the id of a package's entry
     cannot switch it off from Simple Mode.
     """
-    data = request.json or {}
+    data = _json_body()
     entry_id = data.get("id", "")
     if _ui_mode() != "advanced" and autostart.user_owned(entry_id) is not True:
         return _advanced_only()
     try:
-        ok, msg, detail = autostart.set_enabled(entry_id, bool(data.get("enabled")))
+        # Only a real boolean switches anything: a string like "false" arriving in
+        # hand-made JSON must not read as True (the frontend sends real booleans).
+        ok, msg, detail = autostart.set_enabled(entry_id, data.get("enabled") is True)
         return jsonify({"ok": ok, "message": msg, "detail": detail})
     except Exception as exc:
         return _err(exc)
@@ -466,7 +498,7 @@ def api_startup_toggle():
 
 @app.post("/api/startup/remove")
 def api_startup_remove():
-    data = request.json or {}
+    data = _json_body()
     entry_id = data.get("id", "")
     if _ui_mode() != "advanced" and autostart.user_owned(entry_id) is not True:
         return _advanced_only()
@@ -493,13 +525,15 @@ def api_shortcuts():
 @app.post("/api/shortcuts/add")
 def api_shortcuts_add():
     """Create a new desktop shortcut in ~/.local/share/applications."""
-    data = request.json or {}
+    data = _json_body()
     name = str(data.get("name") or "").strip()
     exec_line = str(data.get("exec") or "").strip()
     comment = str(data.get("comment") or "").strip()
     icon = str(data.get("icon") or "").strip()
     category = str(data.get("category") or "Utility").strip()
-    terminal = bool(data.get("terminal"))
+    # Only a real boolean ticks the box; the frontend sends real booleans, so a
+    # string like "false" in hand-made JSON must not turn Terminal on.
+    terminal = data.get("terminal") is True
     try:
         ok, msg, detail = shortcuts_mod.add(
             name=name,
@@ -517,7 +551,7 @@ def api_shortcuts_add():
 @app.post("/api/shortcuts/remove")
 def api_shortcuts_remove():
     """Delete a user shortcut or hide a system shortcut from the user menu."""
-    data = request.json or {}
+    data = _json_body()
     entry_id = str(data.get("id") or "").strip()
     try:
         ok, msg, detail = shortcuts_mod.remove(entry_id)
@@ -572,7 +606,7 @@ def api_package(name):
 def api_package_remove():
     if _ui_mode() != "advanced":
         return _advanced_only()
-    data = request.json or {}
+    data = _json_body()
     name = (data.get("name") or "").strip()
     if not name:
         return jsonify({"ok": False,
@@ -600,6 +634,8 @@ def api_package_remove():
             return _busy_reply()
         ok, msg, detail = result
         core.log_action("remove", name, ok, msg)
+        if ok:
+            ownership.reset_cache()
         return jsonify({"ok": ok, "message": msg, "detail": detail})
     except Exception as exc:
         return _err(exc)
@@ -622,6 +658,9 @@ def api_autoremove():
         if result is None:
             return _busy_reply()
         ok, msg, detail = result
+        core.log_action("autoremove", "apt", ok, msg)
+        if ok:
+            ownership.reset_cache()
         return jsonify({"ok": ok, "message": msg, "detail": detail})
     except Exception as exc:
         return _err(exc)
@@ -655,7 +694,7 @@ def api_packages_install():
     """
     if _ui_mode() != "advanced":
         return _advanced_only()
-    data = request.json or {}
+    data = _json_body()
     manager = str(data.get("manager") or "")
     name = str(data.get("name") or "").strip()
     if not name:
@@ -680,6 +719,8 @@ def api_packages_install():
             return _busy_reply()
         ok, msg, detail = result
         core.log_action("install", f"{manager}:{name}", ok, msg)
+        if ok:
+            ownership.reset_cache()
         return jsonify({"ok": ok, "message": msg, "detail": detail})
     except Exception as exc:
         return _err(exc)
@@ -717,7 +758,7 @@ def api_updates_run():
     version and never removes anything, so it is not gated the way install and
     removal are. The confirm dialog and the polkit password are the protections.
     """
-    data = request.json or {}
+    data = _json_body()
     manager = str(data.get("manager") or "")
     step = str(data.get("step") or "update")
     name = str(data.get("name") or "").strip()
@@ -725,6 +766,14 @@ def api_updates_run():
     if manager not in ("apt", "snap", "flatpak"):
         return jsonify({"ok": False,
                         "message": proc.t("SLPM does not manage this item.")}), 400
+    # A single-item update takes its name from the browser; check its shape here,
+    # like every other endpoint-level validator, instead of answering 200 from
+    # deep inside the manager call.
+    if name and not ((manager == "apt" and proc.is_apt_pkg(name))
+                     or (manager == "flatpak" and proc.is_flatpak_app_id(name))
+                     or (manager == "snap" and proc.is_snap_name(name))):
+        return jsonify({"ok": False, "message": proc.t(
+            "This does not look like a package name: {name}", name=name)}), 400
 
     def work():
         if name:
@@ -761,6 +810,8 @@ def api_updates_run():
             return _busy_reply()
         ok, msg, detail = result
         core.log_action("update", manager, ok, msg)
+        if ok:
+            ownership.reset_cache()
         return jsonify({"ok": ok, "message": msg, "detail": detail})
     except Exception as exc:
         return _err(exc)
@@ -795,18 +846,26 @@ def api_status():
 
 @app.route("/api/pick", methods=["GET", "POST"])
 def api_pick():
-    """Native file chooser, when one is available. Falls back to typing a path."""
-    for tool in (["zenity", "--file-selection",
-                  f"--title={proc.t('Choose a file to install')}"],
-                 ["kdialog", "--getopenfilename", os.path.expanduser("~")]):
-        if proc.which(tool[0]):
-            rc, out, _ = proc.run(tool, timeout=300)
-            if rc == 0 and out.strip():
-                return jsonify({"ok": True, "path": out.strip()})
-            return jsonify({"ok": False, "cancelled": True})
-    return jsonify({"ok": False, "message": proc.t(
-        "No file chooser is installed on this computer. Paste the file path "
-        "instead.")})
+    """Native file chooser, when one is available. Falls back to typing a path.
+
+    A chooser that ran but returned nothing (the user cancelled) answers
+    cancelled; a machine with no chooser at all points at the typed-path input.
+    """
+    tools = [t for t in (["zenity", "--file-selection",
+                          f"--title={proc.t('Choose a file to install')}"],
+                         ["kdialog", "--getopenfilename", os.path.expanduser("~")])
+             if proc.which(t[0])]
+    if not tools:
+        return jsonify({"ok": False, "message": proc.t(
+            "No file chooser is installed on this computer. Paste the file path "
+            "instead.")})
+    for tool in tools:
+        # 180s is generous for finding a file; a local, single-user app accepts
+        # the wait-inside-the-request worker-pinning trade-off.
+        rc, out, _ = proc.run(tool, timeout=180)
+        if rc == 0 and out.strip():
+            return jsonify({"ok": True, "path": out.strip()})
+    return jsonify({"ok": False, "cancelled": True})
 
 
 @app.errorhandler(404)

@@ -21,6 +21,7 @@
     <binary>slpm</binary>
   </provides>
   <releases>
+    <release version="0.3.1" date="2026-10-19"/>
     <release version="0.3.0" date="2026-10-18">
       <description>
         <p>The dashboard now has a version check in its top bar. It compares

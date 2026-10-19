@@ -154,21 +154,32 @@ def start_server(port):
 
 
 def ensure_server():
-    """Reuse a running SLPM server, or start one. Returns its base URL."""
+    """Reuse a running SLPM server, or start one. Returns its base URL.
+
+    A port that looked free can be taken between the probe and the bind, so the
+    startup itself is retried: each failed attempt picks a fresh random port and
+    only the third failure in a row gives up on hosting (from there the caller
+    falls back to opening a browser the way it does when the window will not start).
+    """
     preferred = f"http://127.0.0.1:{PREFERRED_PORT}"
     if _is_slpm(preferred):
         print(f"{preferred} (existing server)")
         return preferred
-    port = PREFERRED_PORT if _port_free(PREFERRED_PORT) else _free_port()
-    base = f"http://127.0.0.1:{port}"
-    start_server(port)
-    deadline = time.time() + 15
-    while time.time() < deadline:
-        if _is_slpm(base):
-            print(f"{base} (started)")
-            return base
-        time.sleep(0.15)
-    raise RuntimeError(f"the SLPM server did not come up on {base}")
+    last_base = preferred
+    for attempt in range(3):
+        if attempt == 0 and _port_free(PREFERRED_PORT):
+            port = PREFERRED_PORT
+        else:
+            port = _free_port()
+        last_base = f"http://127.0.0.1:{port}"
+        start_server(port)
+        deadline = time.time() + 15
+        while time.time() < deadline:
+            if _is_slpm(last_base):
+                print(f"{last_base} (started)")
+                return last_base
+            time.sleep(0.15)
+    raise RuntimeError(f"the SLPM server did not come up on {last_base}")
 
 
 # ----------------------------------------------------------------- ui surface

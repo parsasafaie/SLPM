@@ -18,7 +18,12 @@ function setBusy(on, title, note) {
   }
 }
 
+let detectSeq = 0;
 async function detect() {
+  // Sequence token: a newer keystroke (or a drop, or an auto-filled download) starts
+  // its own detect, and a slow response for the previous path must never flip the
+  // Install button on or paint its result for a file that is no longer selected.
+  const seq = ++detectSeq;
   const path = pathInput.value.trim();
   detected = null;
   installBtn.disabled = true;
@@ -26,6 +31,7 @@ async function detect() {
   if (!path) return;
   detectBox.innerHTML = `<span class="muted small">${esc(T('Checking the file…'))}</span>`;
   const r = await api('/api/detect', { path });
+  if (seq !== detectSeq) return;
   if (!r.ok) { detectBox.innerHTML = ''; return; }
   detected = r;
   const cls = r.installable ? 'ok' : 'bad';
@@ -181,7 +187,12 @@ downloadUrl.addEventListener('keydown', e => {
 downloadBtn.onclick = () => { if (isValidUrl(downloadUrl.value)) startDownload(); };
 
 async function startDownload() {
+  // One job per link: a rapid second click (or Enter) while the start request is in
+  // flight must not spawn a duplicate download of the same URL. The Enter path and the
+  // button share this gate; syncDownloadBtn() below re-enables it from the URL state.
+  if (downloadBtn.disabled) return;
   const url = downloadUrl.value.trim();
+  downloadBtn.disabled = true;
   const r = await api('/api/download/start', { url });
   syncDownloadBtn();
   if (!r.ok) {
@@ -191,14 +202,17 @@ async function startDownload() {
   downloadBar.classList.remove('hidden');
 }
 
-/* Poll the server so progress and state stay live without a websocket. */
+/* Poll the server so progress and state stay live without a websocket. The tick is
+   skipped while the tab is hidden, so a background page does not keep the server
+   (and the radio) busy for a bar the user cannot see. */
 let downloadPoll;
 function pollDownloads() {
   clearInterval(downloadPoll);
   downloadPoll = setInterval(async () => {
+    if (document.hidden) return;
     const r = await api('/api/downloads');
     if (r.ok) renderDownloads(r.downloads || []);
-  }, 1000);
+  }, 2000);
 }
 
 const STATE_LABEL = {

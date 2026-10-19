@@ -77,6 +77,10 @@ def _filename_from_url(url):
     return name if "." in name else "download"
 
 
+class _BlockedRedirect(Exception):
+    """A redirect aimed somewhere start() would have refused; the job must abort."""
+
+
 class _CappingRedirectHandler(urllib.request.HTTPRedirectHandler):
     """urllib follows redirects without a count; a pair of servers that redirect
     at each other would loop the job until the per-read timeout. Cap the hops."""
@@ -89,6 +93,12 @@ class _CappingRedirectHandler(urllib.request.HTTPRedirectHandler):
         self._count += 1
         if self._count > self.limit:
             raise urllib.error.HTTPError(newurl, code, "Too many redirects", headers, fp)
+        # A redirect is a new URL chosen by the server, so every hop is gated like the
+        # original link in start(): without this, an outer link could be redirected at
+        # 127.0.0.1, the metadata address or a LAN host and followed anyway (SSRF).
+        if _disallowed_target(newurl):
+            fp.close()
+            raise _BlockedRedirect(newurl)
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
@@ -132,18 +142,39 @@ def _blocked_host(hostname):
     return False
 
 
+def _disallowed_target(url):
+    """The URL gate shared by start(), every redirect hop and every reconnection:
+    only a web (http/https) URL is allowed, and its host must be neither this
+    machine nor the local network. Kept as one small function so it can be
+    unit-tested directly."""
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        return True
+    return _blocked_host(parsed.hostname)
+
+
 def _unique_path(dest):
-    """A destination path that does not clobber a file already in Downloads."""
+    """A destination path that does not clobber a file already in Downloads.
+
+    The chosen name is claimed immediately with an exclusive create (O_CREAT | O_EXCL),
+    so two jobs racing for the same name cannot both take it: the loser of the race
+    gets FileExistsError and moves on to the next candidate instead of sharing a file
+    with the winner.
+    """
     dest = Path(dest)
-    if not dest.exists():
-        return dest
     stem, suffix = dest.stem, dest.suffix
-    i = 1
+    i = 0
     while True:
-        cand = dest.parent / f"{stem} ({i}){suffix}"
-        if not cand.exists():
-            return cand
-        i += 1
+        cand = dest if i == 0 else dest.parent / f"{stem} ({i}){suffix}"
+        try:
+            fd = os.open(cand, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o666)
+        except FileExistsError:
+            i += 1
+            continue
+        except OSError:
+            return cand  # not creatable (e.g. no permission); the download reports it
+        os.close(fd)
+        return cand
 
 
 class DownloadJob:
@@ -189,29 +220,42 @@ class DownloadJob:
         self._thread = threading.Thread(target=self._run, daemon=True)
         self._thread.start()
 
+    def _fail(self, message):
+        """Mark the job failed with the given message; returns the reason the run
+        loop expects. Any path that leaves a job in "failed" must go through here
+        so the state under the lock is set together with the error text."""
+        with self._lock:
+            self.state = "failed"
+            self.finished_at = time.time()
+            self.error = message
+        return "failed"
+
     def _run(self):
         _lang_ctx.set(self.lang)
         proc.set_lang(self.lang)
-        while True:
-            with self._lock:
-                state = self.state
-            if state in ("stopped", "failed", "done"):
-                return
-            if state == "paused":
-                time.sleep(POLL)
-                continue
-            # queued or running: fetch until the stream ends or a control comes in.
-            reason = self._download_once()
-            if reason == "done":
+        try:
+            while True:
                 with self._lock:
-                    self.state = "done"
-                    self.finished_at = time.time()
-                return
-            if reason == "failed":
-                # self.state is already "failed" (and self.error set) inside the
-                # call; nothing else to do but leave the loop.
-                return
-            # 'paused' or 'stopped' -> the loop above rechecks the state each pass.
+                    state = self.state
+                if state in ("stopped", "failed", "done"):
+                    return
+                if state == "paused":
+                    time.sleep(POLL)
+                    continue
+                # queued or running: fetch until the stream ends or a control comes in.
+                reason = self._download_once()
+                if reason == "done":
+                    with self._lock:
+                        self.state = "done"
+                        self.finished_at = time.time()
+                    return
+                if reason == "failed":
+                    # self.state is already "failed" (and self.error set) inside the
+                    # call; nothing else to do but leave the loop.
+                    return
+                # 'paused' or 'stopped' -> the loop above rechecks the state each pass.
+        except Exception as exc:  # any escape would otherwise strand the job "running"
+            return self._fail(f"{_t('Download failed.')} {exc}".strip())
 
     def _download_once(self):
         """Download from the current byte offset until done, paused or stopped.
@@ -222,16 +266,29 @@ class DownloadJob:
         them.
         """
         pos = self.downloaded
+        # A resume re-opens the connection and a hostname can resolve differently on
+        # each attempt, so the start() gate is re-run right before every open.
+        # Residual risk: the resolved IP is not pinned (that would break proxied
+        # environments), so a rebinding between this check and connect() can still slip.
+        if _disallowed_target(self.url):
+            return self._fail(_t("This link points at a local or reserved address, "
+                                 "so SLPM will not download it."))
         try:
             req = urllib.request.Request(self.url)
             if pos > 0:
                 req.add_header("Range", f"bytes={pos}-")
             resp = _opener().open(req, timeout=CONNECT_TIMEOUT)
+        except _BlockedRedirect:
+            return self._fail(_t("This link points at a local or reserved address, "
+                                 "so SLPM will not download it."))
         except urllib.error.HTTPError as exc:
             # A 416 means the server does not support range resumes; restart the
             # whole file fresh (truncating the partial) rather than append twice.
             if exc.code == 416 and pos > 0:
-                os.truncate(self.path, 0)
+                try:
+                    os.truncate(self.path, 0)
+                except OSError:
+                    pass  # the partial may already be gone; the fresh open recreates it
                 with self._lock:
                     self.downloaded = 0
                     self.total = None
@@ -261,7 +318,10 @@ class DownloadJob:
             # downloaded bytes, so drop the partial and start the whole thing over
             # without a Range header. Most servers return 206 here, which is the
             # normal continue path taken below.
-            os.truncate(self.path, 0)
+            try:
+                os.truncate(self.path, 0)
+            except OSError:
+                pass  # the partial may already be gone; append-mode recreates it
             with self._lock:
                 self.downloaded = 0
                 self.total = None
@@ -331,7 +391,7 @@ def start(url):
         return {"ok": False, "error": _t("Enter a link starting with http:// or https://")}
     # The destination is checked before the job is created, so a blocked link never
     # even touches the filesystem.
-    if _blocked_host(urlparse(url).hostname):
+    if _disallowed_target(url):
         return {"ok": False,
                 "error": _t("This link points at a local or reserved address, so SLPM "
                             "will not download it.")}

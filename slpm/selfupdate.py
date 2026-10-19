@@ -23,6 +23,7 @@ answer carries both command pairs and lets the page ask which one is wanted.
 import json
 import os
 import re
+import shlex
 import urllib.error
 import urllib.request
 
@@ -125,20 +126,23 @@ def _plan(release, variant):
         if not url:
             continue
         file_name = pattern.format(version=version)
+        # The names and URLs come from the release itself, so they are shell-quoted
+        # before they reach a command string rather than being pasted in raw.
         download = [
             "cd ~/Downloads",
-            f"wget -O {file_name} {url}",
+            f"wget -O {shlex.quote(file_name)} {shlex.quote(url)}",
         ]
         if sums_url:
             download += [
-                f"wget -O {SUMS_ASSET} {sums_url}",
+                f"wget -O {shlex.quote(SUMS_ASSET)} {shlex.quote(sums_url)}",
                 "sha256sum --ignore-missing -c SHA256SUMS.txt",
             ]
         plans[name] = {
             "file": file_name,
             "url": url,
             "download_cmd": "\n".join(download),
-            "run_cmd": f"chmod +x {file_name}\n./{file_name}",
+            "run_cmd": (f"chmod +x {shlex.quote(file_name)}\n"
+                        f"./{shlex.quote(file_name)}"),
         }
 
     return {
