@@ -21,6 +21,22 @@
     <binary>slpm</binary>
   </provides>
   <releases>
+    <release version="0.4.0" date="2026-11-07">
+      <description>
+        <p>Install by name now searches all three managers as you type: the apt
+        repositories, the Snap store and the Flatpak remotes. Picking a suggestion
+        fills in the exact name to install - for Flatpak, the app id - so the exact
+        name no longer has to be known in advance. The suggestion and dialog choice
+        buttons now take their text color from the theme, fixing black-on-dark text
+        in the dark theme.</p>
+        <p xml:lang="fa">«نصب با نام» اکنون هنگام تایپ در هر سه مدیر جست‌وجو
+        می‌کند: انبارهای apt، فروشگاه Snap و انبارهای Flatpak. با انتخاب یک
+        پیشنهاد، نام دقیق برای نصب در جعبه گذاشته می‌شود - برای Flatpak، شناسهٔ
+        برنامه - پس دیگر لازم نیست نام دقیق را از قبل بدانید. رنگ متن دکمه‌های
+        پیشنهاد و انتخاب اکنون از تم خوانده می‌شود و مشکل متن مشکی روی زمینهٔ
+        تیره در تم تاریک رفع شده است.</p>
+      </description>
+    </release>
     <release version="0.3.1" date="2026-10-19"/>
     <release version="0.3.0" date="2026-10-18">
       <description>

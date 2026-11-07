@@ -1041,13 +1041,13 @@ check("an unparseable current version is never ordered",
       selfupdate.compare_status("source", "v9.9.9"), "unknown")
 
 _RELEASE = {
-    "tag_name": "v0.4.0",
-    "html_url": "https://github.com/parsasafaie/SLPM/releases/tag/v0.4.0",
+    "tag_name": "v0.5.0",
+    "html_url": "https://github.com/parsasafaie/SLPM/releases/tag/v0.5.0",
     "assets": [
-        {"name": "SLPM_0.4.0-x86_64.AppImage",
-         "browser_download_url": "https://example.invalid/SLPM_0.4.0-x86_64.AppImage"},
-        {"name": "SLPM-Desktop_0.4.0-x86_64.AppImage",
-         "browser_download_url": "https://example.invalid/SLPM-Desktop_0.4.0-x86_64.AppImage"},
+        {"name": "SLPM_0.5.0-x86_64.AppImage",
+         "browser_download_url": "https://example.invalid/SLPM_0.5.0-x86_64.AppImage"},
+        {"name": "SLPM-Desktop_0.5.0-x86_64.AppImage",
+         "browser_download_url": "https://example.invalid/SLPM-Desktop_0.5.0-x86_64.AppImage"},
         {"name": "SHA256SUMS.txt",
          "browser_download_url": "https://example.invalid/SHA256SUMS.txt"},
     ],
@@ -1057,14 +1057,14 @@ check("the plan reports the newer release", plan["status"], "update_available")
 check("the running variant is echoed", plan["variant"], "desktop")
 _dl = plan["plan"]["desktop"]["download_cmd"]
 check("only the desktop image is named in the desktop commands",
-      "SLPM_0.4.0-x86_64.AppImage" in _dl, False)
+      "SLPM_0.5.0-x86_64.AppImage" in _dl, False)
 check("the desktop URL is in the download command",
-      "https://example.invalid/SLPM-Desktop_0.4.0-x86_64.AppImage" in _dl, True)
+      "https://example.invalid/SLPM-Desktop_0.5.0-x86_64.AppImage" in _dl, True)
 check("the download command checks the published sums",
       "sha256sum --ignore-missing -c SHA256SUMS.txt" in _dl, True)
 check("the run command is the same file, made executable",
       plan["plan"]["desktop"]["run_cmd"],
-      "chmod +x SLPM-Desktop_0.4.0-x86_64.AppImage\n./SLPM-Desktop_0.4.0-x86_64.AppImage")
+      "chmod +x SLPM-Desktop_0.5.0-x86_64.AppImage\n./SLPM-Desktop_0.5.0-x86_64.AppImage")
 check("the web variant gets its own commands", "web" in plan["plan"], True)
 check("an unknown variant still carries both pairs",
       sorted(selfupdate._plan(_RELEASE, "unknown")["plan"]), ["desktop", "web"])
