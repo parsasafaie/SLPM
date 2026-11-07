@@ -668,19 +668,45 @@ def api_autoremove():
 
 # -------------------------------------------------------- install by name
 
-@app.get("/api/apt/search")
-def api_apt_search():
-    """Search the apt repositories by package name - Advanced Mode only, like the
-    install it feeds."""
+def _repo_search(search_fn):
+    """The shared body of the three repository-search endpoints (apt, snap, flatpak).
+
+    All three are read-only queries against the repository a name install would
+    pull from, and all three are Advanced Mode only, like the install they feed.
+    The term is capped and shape-checked before it reaches any tool: the tools are
+    called as argument arrays, but a query starting with a dash would still be read
+    as a flag by them, so is_search_term() refuses it first.
+    """
     if _ui_mode() != "advanced":
         return _advanced_only()
     q = (request.args.get("q") or "").strip()[:100]
     if not q:
         return jsonify({"ok": True, "results": []})
+    if not proc.is_search_term(q):
+        return jsonify({"ok": False,
+                        "message": proc.t("This search term cannot be used.")}), 400
     try:
-        return jsonify({"ok": True, "results": apt.search(q)})
+        return jsonify({"ok": True, "results": search_fn(q)})
     except Exception as exc:
         return _err(exc)
+
+
+@app.get("/api/apt/search")
+def api_apt_search():
+    """Search the apt repositories by package name."""
+    return _repo_search(apt.search)
+
+
+@app.get("/api/snap/search")
+def api_snap_search():
+    """Search the snap store."""
+    return _repo_search(flatpak_snap.snap_search)
+
+
+@app.get("/api/flatpak/search")
+def api_flatpak_search():
+    """Search the configured flatpak remotes."""
+    return _repo_search(flatpak_snap.flatpak_search)
 
 
 @app.post("/api/packages/install")

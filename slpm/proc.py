@@ -36,6 +36,22 @@ def is_snap_name(name):
     return bool(SNAP_NAME.match(name or ""))
 
 
+def is_search_term(term):
+    """Whether a free-text repository-search query may be handed to a search tool.
+
+    A search is free text - "visual studio", "org.gimp", a Persian word - so the
+    strict package shapes above do not apply. What must still hold: the term cannot
+    start with a dash, because a leading dash is read as a flag by every tool that
+    takes a query (a term of "-o" would reach apt-cache as an option), and control
+    characters have no business in a search box. The first character must be a
+    letter or digit; anything else is decoration, not a query.
+    """
+    t = str(term or "").strip()
+    if not t or len(t) > 100 or not t[0].isalnum():
+        return False
+    return all(ord(ch) >= 32 and ord(ch) != 127 for ch in t)
+
+
 # ---------------------------------------------------------------- live processes
 
 def exe_to_pids():

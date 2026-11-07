@@ -411,9 +411,9 @@ $('#cleanup').onclick = () => {
 /* ---------------------------------------------------------- install by name
 
    The card lives in the template and is shown by applyModeChrome in Advanced Mode.
-   apt is the only manager with a search endpoint, so the suggestion list appears
-   only while apt is selected; snap and flatpak installs take the typed name and are
-   shape-checked on the server. */
+   All three managers have a search endpoint, so the suggestion list appears next to
+   the input for whichever manager is selected; a suggested row fills the input with
+   the name the install endpoint expects (the app id, for flatpak). */
 
 const pkgManager = $('#pkg-manager');
 const pkgName = $('#pkg-name');
@@ -431,7 +431,6 @@ const PKG_PLACEHOLDERS = {
 function syncPkgBox() {
   pkgName.placeholder = PKG_PLACEHOLDERS[pkgManager.value] || '';
   pkgInstall.disabled = !pkgName.value.trim();
-  if (pkgManager.value !== 'apt') pkgResults.innerHTML = '';
 }
 
 function paintSearchResults(results) {
@@ -448,7 +447,8 @@ function paintSearchResults(results) {
     b.type = 'button';
     b.className = 'choice';
     b.innerHTML = `<strong></strong><small></small>`;
-    $('strong', b).textContent = res.name;
+    /* flatpak rows carry a human "title" next to the installable app id. */
+    $('strong', b).textContent = res.title || res.name;
     $('small', b).textContent = res.summary;
     b.onclick = () => {
       pkgName.value = res.name;
@@ -464,17 +464,25 @@ pkgName.addEventListener('input', () => {
   syncPkgBox();
   clearTimeout(pkgSearchTimer);
   const q = pkgName.value.trim();
-  if (pkgManager.value !== 'apt' || q.length < 2) { pkgResults.innerHTML = ''; return; }
+  const mgr = pkgManager.value;
+  if (q.length < 2) { pkgResults.innerHTML = ''; return; }
   pkgResults.innerHTML = `<p class="small muted">${esc(T('Searching…'))}</p>`;
   pkgSearchTimer = setTimeout(async () => {
-    const r = await api(`/api/apt/search?q=${encodeURIComponent(q)}`);
-    // A newer keystroke may have started its own search; only the latest paints.
-    if (r.ok && pkgName.value.trim() === q) paintSearchResults(r.results || []);
-    else pkgResults.innerHTML = '';
+    const r = await api(`/api/${mgr}/search?q=${encodeURIComponent(q)}`);
+    // A newer keystroke or a manager switch may have started its own search; only
+    // the latest paints.
+    if (r.ok && pkgName.value.trim() === q && pkgManager.value === mgr) {
+      paintSearchResults(r.results || []);
+    } else {
+      pkgResults.innerHTML = '';
+    }
   }, 250);
 });
 
-pkgManager.addEventListener('change', syncPkgBox);
+pkgManager.addEventListener('change', () => {
+  pkgResults.innerHTML = '';
+  syncPkgBox();
+});
 
 pkgInstall.onclick = async () => {
   const name = pkgName.value.trim();

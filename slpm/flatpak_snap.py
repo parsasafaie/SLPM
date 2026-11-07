@@ -34,6 +34,42 @@ def flatpak_installed():
     return apps
 
 
+def flatpak_search(term):
+    """Search the configured flatpak remotes - a read-only query.
+
+    The first search may fetch the remotes' appstream data, so it gets a longer
+    timeout than a purely local command would need.
+    """
+    if not proc.which("flatpak") or not proc.is_search_term(term):
+        return []
+    rc, out, _ = proc.run(
+        ["flatpak", "search", "--columns=application,name,version,description", term],
+        timeout=120,
+    )
+    return _parse_flatpak_search(out) if rc == 0 else []
+
+
+def _parse_flatpak_search(out):
+    """Rows are tab-separated when --columns is used on a non-terminal.
+
+    The application id comes first, because installing needs the id; the human
+    name rides along as "title". A header line (some flatpak builds print one)
+    is recognised and skipped by its first cell.
+    """
+    apps = []
+    for line in proc.lines(out):
+        parts = line.split("\t")
+        if len(parts) < 2 or parts[0].strip().lower() == "application id":
+            continue
+        apps.append({
+            "name": parts[0].strip(),
+            "title": (parts[1] or parts[0]).strip(),
+            "version": parts[2].strip() if len(parts) > 2 else "",
+            "summary": " ".join(p.strip() for p in parts[3:]).strip(),
+        })
+    return apps
+
+
 def flatpak_uninstall(app_id):
     """Flatpak is a per-user operation, so it needs no escalation at all."""
     if not proc.is_flatpak_app_id(app_id):
@@ -177,6 +213,32 @@ def snap_installed():
             "notes": (p[5] if len(p) > 5 else "").strip("-"),
             "size": "",
             "manager": "snap",
+        })
+    return apps
+
+
+def snap_search(term):
+    """Search the snap store - the same store snap install pulls from."""
+    if not proc.which("snap") or not proc.is_search_term(term):
+        return []
+    rc, out, _ = proc.run(["snap", "find", term], timeout=60)
+    return _parse_snap_find(out) if rc == 0 else []
+
+
+def _parse_snap_find(out):
+    """snap find prints a header row and then space-padded columns
+    (Name Version Publisher Notes Summary). A query with no match prints a single
+    "No matching snaps" line, which parses to an empty list."""
+    apps = []
+    lines = proc.lines(out)
+    for line in lines[1:]:  # first line is the column header
+        p = _COL.split(line.strip())
+        if len(p) < 2:
+            continue
+        apps.append({
+            "name": p[0],
+            "version": p[1],
+            "summary": " ".join(p[4:]).strip() if len(p) > 4 else "",
         })
     return apps
 

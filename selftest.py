@@ -932,6 +932,51 @@ check("snap refuses a malformed name", ok, False)
 ok, msg, _ = flatpak_snap.flatpak_update_one("bad id")
 check("flatpak refuses a malformed id", ok, False)
 
+# The install-by-name box searches all three managers. The query is free text, but it
+# is still handed to a tool as an argument: a leading dash would be read as a flag
+# (an "-o" would reach apt-cache as an option), so it dies at is_search_term() before
+# any command is built. The parsers are checked against canned tool output, so no
+# store is contacted here.
+section("Repository search: term shape and output parsing")
+check("a plain word is a search term", proc.is_search_term("vlc"), True)
+check("spaces survive", proc.is_search_term("visual studio"), True)
+check("a partial app id survives", proc.is_search_term("org.gimp"), True)
+check("a Persian query survives", proc.is_search_term("فارسی"), True)
+check("a leading dash is refused", proc.is_search_term("-o"), False)
+check("a symbol-first term is refused", proc.is_search_term("!!"), False)
+check("an empty query is refused", proc.is_search_term("   "), False)
+check("control characters are refused", proc.is_search_term("vlc\nrm"), False)
+check("a term over the cap is refused", proc.is_search_term("a" * 101), False)
+check("a term at the cap survives", proc.is_search_term("a" * 100), True)
+
+flatpak_rows = (
+    "Application ID\tName\tVersion\tDescription\n"
+    "org.gimp.GIMP\tGIMP\t2.10.38\tCreate images and edit photographs\n"
+    "org.mozilla.firefox\tFirefox\t130.0\tFast web browser\n"
+)
+got = flatpak_snap._parse_flatpak_search(flatpak_rows)
+check("flatpak search rows keep the installable id first",
+      [(r["name"], r["title"]) for r in got],
+      [("org.gimp.GIMP", "GIMP"), ("org.mozilla.firefox", "Firefox")])
+check("flatpak search rows carry the description",
+      got[0]["summary"], "Create images and edit photographs")
+
+snap_rows = (
+    "Name                       Version                         Publisher  "
+    "        Notes    Summary\n"
+    "code                       c4453f8e                        vscode**"
+    "              classic  Code editing. Redefined.\n"
+    "codechenx-tv               0.9.3                           codechenx"
+    "             -        A fast, feature-rich CSV/TSV viewer for the command line\n"
+)
+got = flatpak_snap._parse_snap_find(snap_rows)
+check("snap find rows keep the installable name",
+      [r["name"] for r in got], ["code", "codechenx-tv"])
+check("snap find rows carry the summary",
+      got[0]["summary"], "Code editing. Redefined.")
+check("a snap find with no match parses to nothing",
+      flatpak_snap._parse_snap_find('No matching snaps for "zzzqqqnope"'), [])
+
 # The refresh of a running snap (VS Code open) fails with a multi-line message that
 # ends in the pid list it could not stop. A one-line detail made that list look like
 # the whole error, so the detail keeps a tail of the output instead.
@@ -1258,10 +1303,23 @@ else:
     print("skip  simple /api/updates (apt-get not installed)")
 r = client.get("/api/apt/search", query_string={"q": "vlc"})
 check("GET /api/apt/search is 403 in Simple Mode", r.status_code, 403)
+r = client.get("/api/snap/search", query_string={"q": "code"})
+check("GET /api/snap/search is 403 in Simple Mode", r.status_code, 403)
+r = client.get("/api/flatpak/search", query_string={"q": "gimp"})
+check("GET /api/flatpak/search is 403 in Simple Mode", r.status_code, 403)
 r = client.post("/api/packages/install", json={"manager": "apt", "name": "vlc"})
 check("POST /api/packages/install is 403 in Simple Mode", r.status_code, 403)
 
 client.set_cookie("slpm_mode", "advanced")
+# A search query is handed to a tool as an argument, so a leading dash - which the
+# tool would read as a flag - is refused at the endpoint on every manager's route.
+r = client.get("/api/apt/search", query_string={"q": "-o"})
+check("an option-shaped apt search term is a 400", r.status_code, 400)
+r = client.get("/api/snap/search", query_string={"q": "-rf"})
+check("an option-shaped snap search term is a 400", r.status_code, 400)
+r = client.get("/api/flatpak/search", query_string={"q": "   "})
+check("an empty search query answers no results",
+      (r.status_code, (r.get_json() or {}).get("results")), (200, []))
 r = client.post("/api/packages/install", json={"manager": "apt", "name": ""})
 check("an empty package name is a 400", r.status_code, 400)
 r = client.post("/api/packages/install", json={"manager": "git", "name": "x"})

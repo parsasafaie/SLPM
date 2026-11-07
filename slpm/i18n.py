@@ -496,8 +496,11 @@ _FA = {
 
     # -------------------------------------------------------- install by name
     "Install a package": "نصب یک بسته",
-    "Install by name from a package manager. This works in Advanced Mode only.":
-        "نصب با نام از مدیر بسته. فقط در حالت پیشرفته کار می‌کند.",
+    "Install by name from a package manager - typing suggests matches from its "
+    "repository. This works in Advanced Mode only.":
+        "نصب با نام از مدیر بسته — با تایپ کردن، موارد مشابه از مخزن آن "
+        "پیشنهاد می‌شوند. فقط در حالت پیشرفته کار می‌کند.",
+    "This search term cannot be used.": "این عبارت جست‌وجو قابل استفاده نیست.",
     "Package manager": "مدیر بسته",
     "Package name, like vlc": "نام بسته، مثل vlc",
     "Flatpak app id, like org.gimp.GIMP": "شناسهٔ Flatpak، مثل org.gimp.GIMP",
