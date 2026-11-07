@@ -440,6 +440,7 @@ input:focus, .select:focus {
 .modal .choice {
   text-align: left; padding: .6rem .75rem; border: 1px solid var(--line);
   border-radius: 10px; background: var(--field); cursor: pointer; font: inherit;
+  color: var(--text);
 }
 .modal .choice:hover { border-color: var(--accent); background: var(--choice-hover); }
 .modal .choice small { display: block; color: var(--muted); font-family: var(--mono); font-size: .76rem; }
@@ -477,7 +478,8 @@ dl.kv dd { margin: 0; overflow-wrap: anywhere; }
 .pkg-results p { margin: 0; }
 .pkg-results .choice {
   text-align: left; padding: .6rem .75rem; border: 1px solid var(--line);
-  border-radius: 10px; background: var(--field); cursor: pointer; font: inherit; width: 100%;
+  border-radius: 10px; background: var(--field); cursor: pointer; font: inherit;
+  color: var(--text); width: 100%;
 }
 .pkg-results .choice:hover { border-color: var(--accent); background: var(--choice-hover); }
 .pkg-results .choice strong { display: block; font-weight: 600; }
